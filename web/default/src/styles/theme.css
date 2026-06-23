@@ -241,3 +241,45 @@ For commercial licensing, please contact support@quantumnous.com
     var(--background)
   );
 }
+
+/* ========================================
+   Blitzball Brand Theme Override
+   Purple (#5A1AC7) primary + Gold (#E0A020) accent
+   ======================================== */
+
+:root {
+  /* Primary color - Purple from logo */
+  --primary: oklch(0.45 0.25 290);  /* #5A1AC7 */
+  --primary-foreground: oklch(1 0 0);
+  
+  /* Accent color - Gold from logo */
+  --accent: oklch(0.70 0.15 70);  /* #E0A020 */
+  --accent-foreground: oklch(0.15 0 0);
+}
+
+/* Button overrides */
+button[data-variant="default"],
+.bg-primary {
+  background-color: hsl(272 80% 45%) !important;
+}
+
+button[data-variant="default"]:hover {
+  background-color: hsl(272 80% 38%) !important;
+}
+
+/* Link colors */
+a {
+  color: hsl(272 80% 45%);
+}
+
+a:hover {
+  color: hsl(272 80% 38%);
+}
+
+/* Selected states */
+[data-state="checked"],
+[data-state="on"],
+[aria-selected="true"] {
+  background-color: hsl(272 80% 45%) !important;
+  color: white !important;
+}
