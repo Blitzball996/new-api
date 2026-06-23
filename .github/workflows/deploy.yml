@@ -51,8 +51,18 @@ jobs:
           cp branding/theme/custom.css web/classic/public/branding.css
 
           # 直接修改源代码,硬编码品牌信息
-          # 1. 修改 utils.jsx 的默认系统名
-          sed -i "s/if (!system_name) return 'New API';/if (!system_name) return 'Blitzball';/g" web/classic/src/helpers/utils.jsx
+          # 1. 修改 utils.jsx 的默认系统名 - 直接返回 Blitzball,忽略 localStorage
+          sed -i "s/export function getSystemName() {/export function getSystemName() {\n  return 'Blitzball'; \/\/ Blitzball branding - hardcoded/g" web/classic/src/helpers/utils.jsx
+          # 注释掉原来的 localStorage 逻辑
+          sed -i 's/let system_name = localStorage/\/\/ let system_name = localStorage/g' web/classic/src/helpers/utils.jsx
+          sed -i "s/if (!system_name) return 'New API';/\/\/ if (!system_name) return 'New API';/g" web/classic/src/helpers/utils.jsx
+          sed -i 's/return system_name;/\/\/ return system_name;/g' web/classic/src/helpers/utils.jsx
+
+          # 同样处理 getLogo,硬编码返回 /logo.png
+          sed -i "s/export function getLogo() {/export function getLogo() {\n  return '\/logo.png'; \/\/ Blitzball logo - hardcoded/g" web/classic/src/helpers/utils.jsx
+          sed -i 's/let logo = localStorage/\/\/ let logo = localStorage/g' web/classic/src/helpers/utils.jsx
+          sed -i "s/if (!logo) return '\/logo.png';/\/\/ if (!logo) return '\/logo.png';/g" web/classic/src/helpers/utils.jsx
+          sed -i 's/return logo;$/\/\/ return logo;/g' web/classic/src/helpers/utils.jsx
 
           # 2. 修改 Footer.jsx,移除 New API 链接和文档
           # 将 isDemoSiteMode && ( 改为 false && (,完全隐藏文档区块
