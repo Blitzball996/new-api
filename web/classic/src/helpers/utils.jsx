@@ -47,15 +47,13 @@ export function isRoot() {
 }
 
 export function getSystemName() {
-  let system_name = localStorage.getItem('system_name');
-  if (!system_name) return 'New API';
-  return system_name;
+  // Blitzball branding - hardcoded
+  return 'Blitzball';
 }
 
 export function getLogo() {
-  let logo = localStorage.getItem('logo');
-  if (!logo) return '/logo.png';
-  return logo;
+  // Blitzball logo - hardcoded
+  return '/logo.png';
 }
 
 export function getUserIdFromLocalStorage() {

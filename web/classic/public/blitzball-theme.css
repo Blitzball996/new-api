@@ -1,0 +1,71 @@
+/* Blitzball Brand Theme - Soft Blue */
+:root {
+  /* 主色调 - 柔和的蓝色 */
+  --semi-color-primary: #4A90E2 !important;
+  --semi-color-primary-hover: #357ABD !important;
+  --semi-color-primary-active: #2868A8 !important;
+  --semi-color-primary-disabled: rgba(74, 144, 226, 0.35) !important;
+
+  /* 主色调浅色背景 */
+  --semi-color-primary-light-default: rgba(74, 144, 226, 0.08) !important;
+  --semi-color-primary-light-hover: rgba(74, 144, 226, 0.12) !important;
+  --semi-color-primary-light-active: rgba(74, 144, 226, 0.16) !important;
+}
+
+/* 按钮样式覆盖 */
+.semi-button-primary {
+  background-color: #4A90E2 !important;
+  border-color: #4A90E2 !important;
+}
+
+.semi-button-primary:hover:not(:disabled) {
+  background-color: #357ABD !important;
+  border-color: #357ABD !important;
+}
+
+.semi-button-primary:active:not(:disabled) {
+  background-color: #2868A8 !important;
+  border-color: #2868A8 !important;
+}
+
+/* 链接颜色 */
+a.semi-link,
+.semi-typography-link {
+  color: #4A90E2 !important;
+}
+
+a.semi-link:hover,
+.semi-typography-link:hover {
+  color: #357ABD !important;
+}
+
+/* Tag 标签 */
+.semi-tag-solid {
+  background-color: #4A90E2 !important;
+}
+
+/* 选中状态 - 降低饱和度 */
+.semi-checkbox-checked .semi-checkbox-inner,
+.semi-radio-checked .semi-radio-inner {
+  background-color: #4A90E2 !important;
+  border-color: #4A90E2 !important;
+}
+
+/* Switch 开关 */
+.semi-switch-checked {
+  background-color: #4A90E2 !important;
+}
+
+/* 表格选中行 */
+.semi-table-row-selected {
+  background-color: rgba(74, 144, 226, 0.08) !important;
+}
+
+/* 标签页激活状态 */
+.semi-tabs-tab-active {
+  color: #4A90E2 !important;
+}
+
+.semi-tabs-bar-line {
+  background-color: #4A90E2 !important;
+}

@@ -69,11 +69,7 @@ function App() {
   useEffect(() => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = '/branding.css';
-    link.onerror = () => {
-      // 品牌样式不存在时静默失败
-      console.log('No custom branding styles found');
-    };
+    link.href = '/blitzball-theme.css';
     document.head.appendChild(link);
     return () => {
       document.head.removeChild(link);
