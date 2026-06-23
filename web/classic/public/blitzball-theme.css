@@ -12,10 +12,11 @@
   --semi-color-primary-light-active: rgba(74, 144, 226, 0.16) !important;
 }
 
-/* 按钮样式覆盖 */
+/* 主要按钮 - 蓝色背景白字 */
 .semi-button-primary {
   background-color: #4A90E2 !important;
   border-color: #4A90E2 !important;
+  color: white !important;
 }
 
 .semi-button-primary:hover:not(:disabled) {
@@ -26,6 +27,60 @@
 .semi-button-primary:active:not(:disabled) {
   background-color: #2868A8 !important;
   border-color: #2868A8 !important;
+}
+
+/* 次要按钮 / 未选中按钮 - 浅灰背景蓝字 */
+.semi-button-secondary,
+.semi-button-tertiary,
+.semi-button-light {
+  background-color: #F3F4F6 !important;
+  border-color: #E5E7EB !important;
+  color: #4A90E2 !important;
+}
+
+.semi-button-secondary:hover:not(:disabled),
+.semi-button-tertiary:hover:not(:disabled),
+.semi-button-light:hover:not(:disabled) {
+  background-color: #E5E7EB !important;
+  border-color: #D1D5DB !important;
+  color: #357ABD !important;
+}
+
+/* 标签页 - 未选中浅灰蓝字,选中蓝色下划线 */
+.semi-tabs-tab {
+  color: #6B7280 !important;
+}
+
+.semi-tabs-tab:hover {
+  color: #4A90E2 !important;
+}
+
+.semi-tabs-tab-active {
+  color: #4A90E2 !important;
+  font-weight: 600;
+}
+
+.semi-tabs-bar-line {
+  background-color: #4A90E2 !important;
+}
+
+/* 筛选器按钮组 - 未选中浅灰背景蓝字 */
+.semi-tag,
+.semi-tag-light {
+  background-color: #F3F4F6 !important;
+  border-color: #E5E7EB !important;
+  color: #4A90E2 !important;
+}
+
+.semi-tag:hover {
+  background-color: #E5E7EB !important;
+  color: #357ABD !important;
+}
+
+/* 选中的 Tag - 蓝色背景白字 */
+.semi-tag-solid {
+  background-color: #4A90E2 !important;
+  color: white !important;
 }
 
 /* 链接颜色 */
@@ -39,12 +94,7 @@ a.semi-link:hover,
   color: #357ABD !important;
 }
 
-/* Tag 标签 */
-.semi-tag-solid {
-  background-color: #4A90E2 !important;
-}
-
-/* 选中状态 - 降低饱和度 */
+/* 选中状态 - Checkbox, Radio */
 .semi-checkbox-checked .semi-checkbox-inner,
 .semi-radio-checked .semi-radio-inner {
   background-color: #4A90E2 !important;
@@ -56,16 +106,15 @@ a.semi-link:hover,
   background-color: #4A90E2 !important;
 }
 
-/* 表格选中行 */
+/* 表格选中行 - 浅蓝背景 */
 .semi-table-row-selected {
   background-color: rgba(74, 144, 226, 0.08) !important;
 }
 
-/* 标签页激活状态 */
-.semi-tabs-tab-active {
+/* 下拉菜单选中项 - 浅蓝背景蓝字 */
+.semi-dropdown-item-selected,
+.semi-select-option-selected {
+  background-color: rgba(74, 144, 226, 0.1) !important;
   color: #4A90E2 !important;
 }
 
-.semi-tabs-bar-line {
-  background-color: #4A90E2 !important;
-}
