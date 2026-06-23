@@ -22,6 +22,10 @@
 # Shell scripts
 *.sh text eol=lf
 
+# Patch files (must stay LF so bun patch applies on Linux CI)
+*.patch text eol=lf
+web/bun.lock text eol=lf
+
 # Binary files
 *.png binary
 *.jpg binary
