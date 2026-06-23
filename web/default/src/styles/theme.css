@@ -245,41 +245,19 @@ For commercial licensing, please contact support@quantumnous.com
 /* ========================================
    Blitzball Brand Theme Override
    Purple (#5A1AC7) primary + Gold (#E0A020) accent
+   放在文件末尾,强制覆盖亮色(:root)和暗色(.dark)两套主色
    ======================================== */
 
-:root {
-  /* Primary color - Purple from logo */
-  --primary: oklch(0.45 0.25 290);  /* #5A1AC7 */
-  --primary-foreground: oklch(1 0 0);
-  
-  /* Accent color - Gold from logo */
-  --accent: oklch(0.70 0.15 70);  /* #E0A020 */
-  --accent-foreground: oklch(0.15 0 0);
+:root,
+.dark {
+  --primary: oklch(0.45 0.22 295) !important;
+  --primary-foreground: oklch(0.99 0 0) !important;
+  --color-primary: oklch(0.45 0.22 295) !important;
+  --color-primary-foreground: oklch(0.99 0 0) !important;
+  --sidebar-primary: oklch(0.45 0.22 295) !important;
+  --sidebar-primary-foreground: oklch(0.99 0 0) !important;
+  --ring: oklch(0.45 0.22 295) !important;
+  --accent: oklch(0.72 0.15 75) !important;
+  --accent-foreground: oklch(0.18 0 0) !important;
 }
 
-/* Button overrides */
-button[data-variant="default"],
-.bg-primary {
-  background-color: hsl(272 80% 45%) !important;
-}
-
-button[data-variant="default"]:hover {
-  background-color: hsl(272 80% 38%) !important;
-}
-
-/* Link colors */
-a {
-  color: hsl(272 80% 45%);
-}
-
-a:hover {
-  color: hsl(272 80% 38%);
-}
-
-/* Selected states */
-[data-state="checked"],
-[data-state="on"],
-[aria-selected="true"] {
-  background-color: hsl(272 80% 45%) !important;
-  color: white !important;
-}
