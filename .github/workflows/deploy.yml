@@ -41,6 +41,64 @@ jobs:
           echo "${SHA_SHORT}" > VERSION
           echo "Building VERSION=${SHA_SHORT}"
 
+      - name: Inject Blitzball branding
+        run: |
+          echo "Injecting Blitzball brand assets..."
+
+          # 复制品牌资源
+          mkdir -p web/classic/public
+          cp branding/logo.png web/classic/public/logo.png
+          cp branding/theme/custom.css web/classic/public/branding.css
+
+          # 直接修改源代码,硬编码品牌信息
+          # 1. 修改 utils.jsx 的默认系统名
+          sed -i "s/if (!system_name) return 'New API';/if (!system_name) return 'Blitzball';/g" web/classic/src/helpers/utils.jsx
+
+          # 2. 修改 Footer.jsx,移除 New API 链接和文档
+          # 将 isDemoSiteMode && ( 改为 false && (,完全隐藏文档区块
+          sed -i 's/isDemoSiteMode && (/false \&\& (/g' web/classic/src/components/layout/Footer.jsx
+
+          # 将 "设计与开发由" 和 New API 链接替换为 Blitzball 版权
+          sed -i "s/设计与开发由/© 2024 Blitzball. All rights reserved./g" web/classic/src/components/layout/Footer.jsx
+          sed -i "s|https://github.com/QuantumNous/new-api|https://blitz.mom|g" web/classic/src/components/layout/Footer.jsx
+          sed -i "s/>New API</>Blitzball</g" web/classic/src/components/layout/Footer.jsx
+
+          # 3. 注入 Blitzball 主题色到全局样式
+          cat >> web/classic/public/branding.css << 'EOF'
+
+          /* Blitzball Brand Colors - Global Override */
+          :root {
+            --semi-color-primary: #0066FF !important;
+            --semi-color-primary-hover: #0052CC !important;
+            --semi-color-primary-active: #0047B3 !important;
+            --semi-color-primary-light-default: rgba(0, 102, 255, 0.1) !important;
+            --semi-color-primary-light-hover: rgba(0, 102, 255, 0.2) !important;
+            --semi-color-primary-light-active: rgba(0, 102, 255, 0.3) !important;
+          }
+
+          /* Override button colors */
+          .semi-button-primary {
+            background-color: #0066FF !important;
+            border-color: #0066FF !important;
+          }
+
+          .semi-button-primary:hover {
+            background-color: #0052CC !important;
+            border-color: #0052CC !important;
+          }
+
+          /* Override link colors */
+          a.semi-link, .semi-typography-link {
+            color: #0066FF !important;
+          }
+          EOF
+
+          echo "Brand injection complete"
+          echo "Verifying changes:"
+          grep -n "return 'Blitzball'" web/classic/src/helpers/utils.jsx || echo "System name not changed"
+          grep -n "Blitzball" web/classic/src/components/layout/Footer.jsx || echo "Footer not changed"
+          tail -10 web/classic/public/branding.css
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
