@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/new-api
+  # ghcr 仓库名必须全小写
+  IMAGE: ghcr.io/blitzball996/new-api
 
 jobs:
   build-and-push:
