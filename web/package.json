@@ -5,6 +5,12 @@
     "default",
     "classic"
   ],
+  "overrides": {
+    "date-fns-tz": "^3.2.0"
+  },
+  "patchedDependencies": {
+    "@douyinfe/semi-foundation@2.99.3": "patches/semi-foundation.patch"
+  },
   "catalog": {
     "@lobehub/icons": "^5.10.0",
     "axios": "^1.16.1",

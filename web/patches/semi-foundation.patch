@@ -1,0 +1,41 @@
+diff --git a/lib/es/utils/date-fns-extra.js b/lib/es/utils/date-fns-extra.js
+index f78013d..8cb2b72 100644
+--- a/lib/es/utils/date-fns-extra.js
++++ b/lib/es/utils/date-fns-extra.js
+@@ -1,4 +1,4 @@
+-import { toDate, format as dateFnsFormat, utcToZonedTime as dateFnsUtcToZonedTime, zonedTimeToUtc as dateFnsZonedTimeToUtc } from 'date-fns-tz';
++import { toDate, format as dateFnsFormat, toZonedTime as dateFnsUtcToZonedTime, fromZonedTime as dateFnsZonedTimeToUtc } from 'date-fns-tz';
+ import { parse as dateFnsParse } from 'date-fns';
+ /**
+  * Need to be IANA logo without daylight saving time
+diff --git a/lib/cjs/utils/date-fns-extra.js b/lib/cjs/utils/date-fns-extra.js
+index f3fc99c..6e706d6 100644
+--- a/lib/cjs/utils/date-fns-extra.js
++++ b/lib/cjs/utils/date-fns-extra.js
+@@ -121,7 +121,7 @@ const format = (date, formatToken, options) => {
+     options = Object.assign(Object.assign({}, options), {
+       timeZone
+     });
+-    date = (0, _dateFnsTz.utcToZonedTime)(date, timeZone, options);
++    date = (0, _dateFnsTz.toZonedTime)(date, timeZone, options);
+   }
+   return (0, _dateFnsTz.format)(date, formatToken, options);
+ };
+@@ -140,7 +140,7 @@ const format = (date, formatToken, options) => {
+  * @see https://github.com/marnusw/date-fns-tz#utctozonedtime
+  */
+ exports.format = format;
+-const utcToZonedTime = (date, timeZone, options) => (0, _dateFnsTz.utcToZonedTime)(date, toIANA(timeZone), options);
++const utcToZonedTime = (date, timeZone, options) => (0, _dateFnsTz.toZonedTime)(date, toIANA(timeZone), options);
+ /**
+  * Given a date and any time zone, returns a Date with the equivalent UTC time
+  *
+@@ -156,7 +156,7 @@ const utcToZonedTime = (date, timeZone, options) => (0, _dateFnsTz.utcToZonedTim
+  * @see https://github.com/marnusw/date-fns-tz#zonedtimetoutc
+  */
+ exports.utcToZonedTime = utcToZonedTime;
+-const zonedTimeToUtc = (date, timeZone, options) => (0, _dateFnsTz.zonedTimeToUtc)(date, toIANA(timeZone), options);
++const zonedTimeToUtc = (date, timeZone, options) => (0, _dateFnsTz.fromZonedTime)(date, toIANA(timeZone), options);
+ /**
+  * return current system hour offset based on utc:
+  *
