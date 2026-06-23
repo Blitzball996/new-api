@@ -43,8 +43,8 @@ jobs:
 
       - name: Inject Blitzball logo
         run: |
-          echo "Copying Blitzball logo..."
-          cp branding/logo.png web/classic/public/logo.png
+          echo "Copying Blitzball logo (Asset 4@4x-8.png)..."
+          cp "branding/Asset 4@4x-8.png" web/classic/public/logo.png
           echo "Logo injected successfully"
           ls -lh web/classic/public/logo.png
 

@@ -67,50 +67,11 @@ const FooterBar = () => {
   return (
     <div className='w-full'>
       {footer ? (
-        <footer className='relative h-auto py-4 px-6 md:px-24 w-full flex items-center justify-center overflow-hidden'>
-          <div className='flex flex-col md:flex-row items-center justify-between w-full max-w-[1110px] gap-4'>
-            <div
-              className='custom-footer na-cb6feafeb3990c78 text-sm !text-semi-color-text-1'
-              dangerouslySetInnerHTML={{ __html: footer }}
-            ></div>
-            {brandConfig?.footer ? (
-              <div className='text-sm flex-shrink-0'>
-                <span className='!text-semi-color-text-1'>
-                  {brandConfig.footer.copyright}
-                </span>
-                {brandConfig.footer.links && brandConfig.footer.links.length > 0 && (
-                  <span className='ml-4'>
-                    {brandConfig.footer.links.map((link, index) => (
-                      <span key={index}>
-                        {index > 0 && ' | '}
-                        <a
-                          href={link.url}
-                          target='_blank'
-                          rel='noopener noreferrer'
-                          className='!text-semi-color-primary'
-                        >
-                          {link.text}
-                        </a>
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </div>
-            ) : !brandConfig?.removals?.aboutOriginalProject ? (
-              <div className='text-sm flex-shrink-0'>
-                <span className='!text-semi-color-text-1'>
-                  {t('设计与开发由')}{' '}
-                </span>
-                <a
-                  href='https://github.com/QuantumNous/new-api'
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='!text-semi-color-primary font-medium'
-                >
-                  New API
-                </a>
-              </div>
-            ) : null}
+        <footer className='relative h-auto py-4 px-6 md:px-24 w-full flex items-center justify-end overflow-hidden'>
+          <div className='text-sm flex-shrink-0'>
+            <Typography.Text className='!text-semi-color-text-1'>
+              © {currentYear} Blitzball. All rights reserved.
+            </Typography.Text>
           </div>
         </footer>
       ) : (

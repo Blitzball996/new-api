@@ -1,41 +1,45 @@
-/* Blitzball Brand Theme - Soft Blue */
+/* Blitzball Brand Theme - Purple & Gold from Logo */
 :root {
-  /* 主色调 - 柔和的蓝色 */
-  --semi-color-primary: #4A90E2 !important;
-  --semi-color-primary-hover: #357ABD !important;
-  --semi-color-primary-active: #2868A8 !important;
-  --semi-color-primary-disabled: rgba(74, 144, 226, 0.35) !important;
+  /* 主色调 - 深紫色 (来自 logo) */
+  --semi-color-primary: #5A1AC7 !important;
+  --semi-color-primary-hover: #4815A5 !important;
+  --semi-color-primary-active: #3A1183 !important;
+  --semi-color-primary-disabled: rgba(90, 26, 199, 0.35) !important;
 
   /* 主色调浅色背景 */
-  --semi-color-primary-light-default: rgba(74, 144, 226, 0.08) !important;
-  --semi-color-primary-light-hover: rgba(74, 144, 226, 0.12) !important;
-  --semi-color-primary-light-active: rgba(74, 144, 226, 0.16) !important;
+  --semi-color-primary-light-default: rgba(90, 26, 199, 0.08) !important;
+  --semi-color-primary-light-hover: rgba(90, 26, 199, 0.12) !important;
+  --semi-color-primary-light-active: rgba(90, 26, 199, 0.16) !important;
+
+  /* 金色强调 */
+  --blitzball-gold: #E0A020;
+  --blitzball-gold-hover: #C88A15;
 }
 
-/* 主要按钮 - 蓝色背景白字 */
+/* 主要按钮 - 紫色背景白字 */
 .semi-button-primary {
-  background-color: #4A90E2 !important;
-  border-color: #4A90E2 !important;
+  background-color: #5A1AC7 !important;
+  border-color: #5A1AC7 !important;
   color: white !important;
 }
 
 .semi-button-primary:hover:not(:disabled) {
-  background-color: #357ABD !important;
-  border-color: #357ABD !important;
+  background-color: #4815A5 !important;
+  border-color: #4815A5 !important;
 }
 
 .semi-button-primary:active:not(:disabled) {
-  background-color: #2868A8 !important;
-  border-color: #2868A8 !important;
+  background-color: #3A1183 !important;
+  border-color: #3A1183 !important;
 }
 
-/* 次要按钮 / 未选中按钮 - 浅灰背景蓝字 */
+/* 次要按钮 / 未选中按钮 - 浅灰背景紫字 */
 .semi-button-secondary,
 .semi-button-tertiary,
 .semi-button-light {
   background-color: #F3F4F6 !important;
   border-color: #E5E7EB !important;
-  color: #4A90E2 !important;
+  color: #5A1AC7 !important;
 }
 
 .semi-button-secondary:hover:not(:disabled),
@@ -43,78 +47,89 @@
 .semi-button-light:hover:not(:disabled) {
   background-color: #E5E7EB !important;
   border-color: #D1D5DB !important;
-  color: #357ABD !important;
+  color: #4815A5 !important;
 }
 
-/* 标签页 - 未选中浅灰蓝字,选中蓝色下划线 */
+/* 标签页 - 未选中灰字,选中紫色 */
 .semi-tabs-tab {
   color: #6B7280 !important;
 }
 
 .semi-tabs-tab:hover {
-  color: #4A90E2 !important;
+  color: #5A1AC7 !important;
 }
 
 .semi-tabs-tab-active {
-  color: #4A90E2 !important;
+  color: #5A1AC7 !important;
   font-weight: 600;
 }
 
 .semi-tabs-bar-line {
-  background-color: #4A90E2 !important;
+  background-color: #5A1AC7 !important;
 }
 
-/* 筛选器按钮组 - 未选中浅灰背景蓝字 */
+/* 筛选器按钮组 - 未选中浅灰背景紫字 */
 .semi-tag,
 .semi-tag-light {
   background-color: #F3F4F6 !important;
   border-color: #E5E7EB !important;
-  color: #4A90E2 !important;
+  color: #5A1AC7 !important;
 }
 
 .semi-tag:hover {
   background-color: #E5E7EB !important;
-  color: #357ABD !important;
+  color: #4815A5 !important;
 }
 
-/* 选中的 Tag - 蓝色背景白字 */
+/* 选中的 Tag - 紫色背景白字 */
 .semi-tag-solid {
-  background-color: #4A90E2 !important;
+  background-color: #5A1AC7 !important;
   color: white !important;
 }
 
-/* 链接颜色 */
+/* 链接颜色 - 紫色 */
 a.semi-link,
 .semi-typography-link {
-  color: #4A90E2 !important;
+  color: #5A1AC7 !important;
 }
 
 a.semi-link:hover,
 .semi-typography-link:hover {
-  color: #357ABD !important;
+  color: #4815A5 !important;
 }
 
 /* 选中状态 - Checkbox, Radio */
 .semi-checkbox-checked .semi-checkbox-inner,
 .semi-radio-checked .semi-radio-inner {
-  background-color: #4A90E2 !important;
-  border-color: #4A90E2 !important;
+  background-color: #5A1AC7 !important;
+  border-color: #5A1AC7 !important;
 }
 
 /* Switch 开关 */
 .semi-switch-checked {
-  background-color: #4A90E2 !important;
+  background-color: #5A1AC7 !important;
 }
 
-/* 表格选中行 - 浅蓝背景 */
+/* 表格选中行 - 浅紫背景 */
 .semi-table-row-selected {
-  background-color: rgba(74, 144, 226, 0.08) !important;
+  background-color: rgba(90, 26, 199, 0.08) !important;
 }
 
-/* 下拉菜单选中项 - 浅蓝背景蓝字 */
+/* 下拉菜单选中项 - 浅紫背景紫字 */
 .semi-dropdown-item-selected,
 .semi-select-option-selected {
-  background-color: rgba(74, 144, 226, 0.1) !important;
-  color: #4A90E2 !important;
+  background-color: rgba(90, 26, 199, 0.1) !important;
+  color: #5A1AC7 !important;
 }
+
+/* 金色强调元素 (可用于特殊按钮/徽章) */
+.blitzball-accent {
+  color: #E0A020 !important;
+}
+
+.blitzball-accent-bg {
+  background-color: #E0A020 !important;
+  color: white !important;
+}
+
 
