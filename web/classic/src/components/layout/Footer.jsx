@@ -23,6 +23,14 @@ import { Typography } from '@douyinfe/semi-ui';
 import { getFooterHTML, getLogo, getSystemName } from '../../helpers';
 import { StatusContext } from '../../context/Status';
 
+// 尝试加载品牌配置
+let brandConfig = null;
+try {
+  brandConfig = require('../../branding.json');
+} catch (e) {
+  // 无品牌配置,使用默认
+}
+
 const FooterBar = () => {
   const { t } = useTranslation();
   const [footer, setFooter] = useState(getFooterHTML());
@@ -46,7 +54,7 @@ const FooterBar = () => {
         <div className='absolute hidden md:block top-[204px] left-[-100px] w-[151px] h-[151px] rounded-full bg-[#FFD166]'></div>
         <div className='absolute md:hidden bottom-[20px] left-[-50px] w-[80px] h-[80px] rounded-full bg-[#FFD166] opacity-60'></div>
 
-        {isDemoSiteMode && (
+        {isDemoSiteMode && !brandConfig?.removals?.aboutOriginalProject && (
           <div className='flex flex-col md:flex-row justify-between w-full max-w-[1110px] mb-10 gap-8'>
             <div className='flex-shrink-0'>
               <img
@@ -227,19 +235,44 @@ const FooterBar = () => {
               className='custom-footer na-cb6feafeb3990c78 text-sm !text-semi-color-text-1'
               dangerouslySetInnerHTML={{ __html: footer }}
             ></div>
-            <div className='text-sm flex-shrink-0'>
-              <span className='!text-semi-color-text-1'>
-                {t('设计与开发由')}{' '}
-              </span>
-              <a
-                href='https://github.com/QuantumNous/new-api'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='!text-semi-color-primary font-medium'
-              >
-                New API
-              </a>
-            </div>
+            {brandConfig?.footer ? (
+              <div className='text-sm flex-shrink-0'>
+                <span className='!text-semi-color-text-1'>
+                  {brandConfig.footer.copyright}
+                </span>
+                {brandConfig.footer.links && brandConfig.footer.links.length > 0 && (
+                  <span className='ml-4'>
+                    {brandConfig.footer.links.map((link, index) => (
+                      <span key={index}>
+                        {index > 0 && ' | '}
+                        <a
+                          href={link.url}
+                          target='_blank'
+                          rel='noopener noreferrer'
+                          className='!text-semi-color-primary'
+                        >
+                          {link.text}
+                        </a>
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+            ) : !brandConfig?.removals?.aboutOriginalProject ? (
+              <div className='text-sm flex-shrink-0'>
+                <span className='!text-semi-color-text-1'>
+                  {t('设计与开发由')}{' '}
+                </span>
+                <a
+                  href='https://github.com/QuantumNous/new-api'
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  className='!text-semi-color-primary font-medium'
+                >
+                  New API
+                </a>
+              </div>
+            ) : null}
           </div>
         </footer>
       ) : (

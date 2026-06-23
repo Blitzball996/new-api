@@ -47,12 +47,28 @@ export function isRoot() {
 }
 
 export function getSystemName() {
+  // 优先使用品牌配置
+  try {
+    const branding = require('../branding.json');
+    if (branding.systemName) return branding.systemName;
+  } catch (e) {
+    // 品牌配置不存在,使用默认逻辑
+  }
+
   let system_name = localStorage.getItem('system_name');
   if (!system_name) return 'New API';
   return system_name;
 }
 
 export function getLogo() {
+  // 优先使用品牌 logo
+  try {
+    const branding = require('../branding.json');
+    if (branding.company) return '/logo.png'; // 品牌 logo 已注入到 public/logo.png
+  } catch (e) {
+    // 品牌配置不存在,使用默认逻辑
+  }
+
   let logo = localStorage.getItem('logo');
   if (!logo) return '/logo.png';
   return logo;

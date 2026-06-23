@@ -25,6 +25,13 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Check out branding (private repo)
+        uses: actions/checkout@v4
+        with:
+          repository: blitzball996/new-api-branding
+          token: ${{ secrets.BRANDING_TOKEN }}
+          path: branding
+
       - name: Resolve version & write VERSION
         id: vars
         run: |
