@@ -94,7 +94,7 @@ export function mapStatusDataToConfig(
   return {
     // Blitzball branding - 强制硬编码,忽略后端配置
     systemName: 'Blitzball',
-    logo: '/logo.png',
+    logo: '/logo.png?v=blitzball2026',
     footerHtml: data.footer_html,
     demoSiteEnabled: data.demo_site_enabled,
     displayTokenStatEnabled: data.display_token_stat_enabled,
