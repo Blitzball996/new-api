@@ -19,6 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 
 import { useState, useCallback, useEffect } from 'react';
 import { initVChartSemiTheme } from '@visactor/vchart-semi-theme';
+// Blitzball fix: 显式注册 VChart 浏览器环境，避免 ed.global.createCanvas undefined 崩溃
+import { registerBrowserEnv } from '@visactor/vchart';
+try {
+  registerBrowserEnv();
+} catch (e) {
+  // eslint-disable-next-line no-console
+  console.warn('registerBrowserEnv failed:', e);
+}
 import {
   modelColorMap,
   renderNumber,
