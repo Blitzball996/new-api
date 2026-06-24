@@ -11,6 +11,20 @@ const semiUiDir = path.resolve(
   '../..',
 )
 
+// VChart ships its own nested copies of the vrender packages, and so does
+// react-vchart. vrender-core exports a module-level singleton env manager
+// (vglobal); when two physical copies exist, registerBrowserEnv() binds the
+// browser env onto one copy's vglobal while the render path reads the other,
+// leaving env undefined -> "Cannot read properties of undefined (reading
+// 'createCanvas')". Force every import of these packages to resolve to the
+// single copy that vchart itself uses for drawing.
+const visactorNested = (name: string) =>
+  path.resolve(
+    __dirname,
+    'node_modules/@visactor/vchart/node_modules/@visactor',
+    name,
+  )
+
 export default defineConfig(({ envMode }) => {
   const env = loadEnv({ mode: envMode, prefixes: ['VITE_'] })
   const clientServerUrl =
@@ -47,10 +61,17 @@ export default defineConfig(({ envMode }) => {
           semiUiDir,
           'dist/css/semi.css',
         ),
+        '@visactor/vrender-core': visactorNested('vrender-core'),
+        '@visactor/vrender-kits': visactorNested('vrender-kits'),
+        '@visactor/vutils': visactorNested('vutils'),
       },
     },
     html: {
       template: './index.html',
+      // Rsbuild otherwise auto-detects public/favicon.ico (the old new-api icon)
+      // and injects a <link rel="icon" href="/favicon.ico"> after our branded
+      // one, so the browser shows the stale icon. Pin it to the Blitzball logo.
+      favicon: './public/logo.png',
     },
     server: {
       host: '0.0.0.0',
@@ -74,6 +95,10 @@ export default defineConfig(({ envMode }) => {
       rspack: {
         module: {
           rules: [
+            {
+              test: /node_modules[\\/]@visactor[\\/]/,
+              sideEffects: true,
+            },
             {
               test: /src[\\/].*\.js$/,
               type: 'javascript/auto',

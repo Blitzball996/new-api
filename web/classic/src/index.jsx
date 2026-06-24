@@ -1,6 +1,5 @@
 import '@douyinfe/semi-ui/react19-adapter';
-import { registerBrowserEnv } from '@visactor/vchart';
-try { registerBrowserEnv(); } catch (_) {}
+import './vchart-env';
 
 /*
 Copyright (C) 2025 QuantumNous

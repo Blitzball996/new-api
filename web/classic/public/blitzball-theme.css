@@ -185,3 +185,23 @@ body, body[theme-mode="dark"], :root {
 .semi-progress-line-bar {
   background-color: #5A1AC7 !important;
 }
+
+/* ===== 根源覆盖:semi-ui 的蓝色色阶 (--semi-blue-N) =====
+   semi-ui 把主色/链接/焦点边框/info 等几十个变量都派生自 --semi-blue-5
+   (rgba(var(--semi-blue-5), 1))。直接覆盖蓝色色阶的 RGB 通道,
+   即可让所有派生颜色一次性变成 Blitzball 紫色 (#5A1AC7 = 90,26,199)。
+   注意:这里是 "R,G,B" 三个通道数字,不是 hex。 */
+body,
+body[theme-mode='dark'],
+:root {
+  --semi-blue-0: 237, 230, 250 !important;
+  --semi-blue-1: 214, 199, 244 !important;
+  --semi-blue-2: 190, 168, 238 !important;
+  --semi-blue-3: 158, 124, 228 !important;
+  --semi-blue-4: 124, 79, 216 !important;
+  --semi-blue-5: 90, 26, 199 !important; /* #5A1AC7 主色 */
+  --semi-blue-6: 72, 21, 165 !important; /* #4815A5 hover */
+  --semi-blue-7: 58, 17, 131 !important; /* #3A1183 active */
+  --semi-blue-8: 44, 13, 99 !important;
+  --semi-blue-9: 30, 9, 66 !important;
+}
