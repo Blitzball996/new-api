@@ -52,8 +52,7 @@ export function getSystemName() {
 }
 
 export function getLogo() {
-  // Blitzball logo - hardcoded with cache-busting version
-  return '/logo.png?v=blitzball2026';
+  return '/logo.png?v=20260624';
 }
 
 export function getUserIdFromLocalStorage() {

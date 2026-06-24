@@ -150,3 +150,38 @@ body, body[theme-mode="dark"], :root {
 .semi-pagination-item-active {
   --semi-color-primary: #5A1AC7 !important;
 }
+
+/* 导航栏选中项 */
+.semi-navigation-item-selected {
+  background-color: rgba(90, 26, 199, 0.08) !important;
+  color: #5A1AC7 !important;
+}
+
+.semi-navigation-item-selected .semi-navigation-item-text,
+.semi-navigation-item-selected .semi-navigation-item-icon {
+  color: #5A1AC7 !important;
+}
+
+/* 分页器当前页 */
+.semi-page-item-active {
+  background-color: #5A1AC7 !important;
+  border-color: #5A1AC7 !important;
+  color: white !important;
+}
+
+/* Input/Select 获得焦点边框 */
+.semi-input-wrapper:focus-within,
+.semi-select:focus-within,
+.semi-input-textarea-wrapper:focus-within {
+  border-color: #5A1AC7 !important;
+}
+
+/* Spin/加载指示器 */
+.semi-spin-wrapper .semi-spin-dot {
+  background-color: #5A1AC7 !important;
+}
+
+/* 进度条 */
+.semi-progress-line-bar {
+  background-color: #5A1AC7 !important;
+}
