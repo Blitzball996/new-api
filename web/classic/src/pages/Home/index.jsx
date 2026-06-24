@@ -162,7 +162,7 @@ const Home = () => {
             {/* 背景模糊晕染球 */}
             <div className='blur-ball blur-ball-indigo' />
             <div className='blur-ball blur-ball-teal' />
-            <div className='flex items-center justify-center px-4 pt-24 pb-8'>
+            <div className='flex items-center justify-center px-4 py-8 min-h-[calc(100vh-64px)]'>
               {/* 居中内容区 */}
               <div className='flex flex-col items-center justify-center text-center max-w-4xl mx-auto'>
                 <div className='flex flex-col items-center justify-center mb-6 md:mb-8'>
@@ -170,13 +170,16 @@ const Home = () => {
                     className={`text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-semi-color-text-0 leading-tight ${isChinese ? 'tracking-wide md:tracking-wider' : ''}`}
                   >
                     <>
-                      {t('统一的')}
-                      <br />
-                      <span className='shine-text'>{t('大模型接口网关')}</span>
+                      {t('直连全球官方大模型')}
                     </>
                   </h1>
                   <p className='text-base md:text-lg lg:text-xl text-semi-color-text-1 mt-4 md:mt-6 max-w-xl'>
-                    {t('多模型统一接入，只需将基址替换为：')}
+                    <span className='shine-text font-semibold'>
+                      {t('满血原生 · 不降智 · 不中转')}
+                    </span>
+                  </p>
+                  <p className='text-sm md:text-base text-semi-color-text-2 mt-3 max-w-md'>
+                    {t('一键接入，替换你的 Base URL')}
                   </p>
                   {/* BASE URL 与端点选择 */}
                   <div className='flex flex-col md:flex-row items-center justify-center gap-4 w-full mt-4 md:mt-6 max-w-md'>

@@ -51,7 +51,7 @@ const FooterBar = () => {
         <div className='flex flex-col md:flex-row items-center justify-between w-full max-w-[1110px] gap-6'>
           <div className='flex flex-wrap items-center gap-2'>
             <Typography.Text className='text-sm !text-semi-color-text-1'>
-              © {currentYear} Blitzball. All rights reserved.
+              © {currentYear} Blitzball Inc. All rights reserved.
             </Typography.Text>
           </div>
         </div>
@@ -70,7 +70,7 @@ const FooterBar = () => {
         <footer className='relative h-auto py-4 px-6 md:px-24 w-full flex items-center justify-end overflow-hidden'>
           <div className='text-sm flex-shrink-0'>
             <Typography.Text className='!text-semi-color-text-1'>
-              © {currentYear} Blitzball. All rights reserved.
+              © {currentYear} Blitzball Inc. All rights reserved.
             </Typography.Text>
           </div>
         </footer>

@@ -714,28 +714,28 @@ html.dark .sbg-variant-green {
 
 .shine-text {
   background: linear-gradient(
-    90deg,
-    currentColor 0%,
-    currentColor 40%,
-    rgba(255, 255, 255, 0.9) 50%,
-    currentColor 60%,
-    currentColor 100%
+    110deg,
+    #5A1AC7 0%,
+    #5A1AC7 35%,
+    #E0A020 50%,
+    #5A1AC7 65%,
+    #5A1AC7 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: sweep-shine 4s linear infinite;
+  animation: sweep-shine 3s ease-in-out infinite;
 }
 
 .dark .shine-text {
   background: linear-gradient(
-    90deg,
-    currentColor 0%,
-    currentColor 40%,
-    #facc15 50%,
-    currentColor 60%,
-    currentColor 100%
+    110deg,
+    #7C3AED 0%,
+    #7C3AED 35%,
+    #FCD34D 50%,
+    #7C3AED 65%,
+    #7C3AED 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
@@ -777,23 +777,37 @@ html.dark .sbg-variant-green {
   filter: blur(120px);
   pointer-events: none;
   z-index: -1;
+  animation: breathe 8s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.7;
+  }
 }
 
 .blur-ball-indigo {
-  background: #6366f1;
-  /* indigo-500 */
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  /* indigo->purple gradient */
   top: 40px;
   left: 50%;
   transform: translateX(-50%);
   opacity: 0.5;
+  animation-delay: 0s;
 }
 
 .blur-ball-teal {
-  background: #14b8a6;
-  /* teal-400 */
+  background: linear-gradient(135deg, #14b8a6, #06b6d4);
+  /* teal->cyan gradient */
   top: 200px;
   left: 30%;
   opacity: 0.4;
+  animation-delay: 4s;
 }
 
 /* 浅色主题下让模糊球更柔和 */
