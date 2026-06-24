@@ -252,6 +252,33 @@ export const useRedemptionsData = () => {
     await copyText(keys);
   };
 
+  // Batch export selected redemption codes as a plain .txt file
+  // (one code per line) for import into auto-delivery card pools
+  // such as 阿奇索 (Aqisuo) / 淘宝自动发货 卡密库.
+  const batchExportRedemptions = () => {
+    if (selectedKeys.length === 0) {
+      showError(t('请至少选择一个兑换码！'));
+      return;
+    }
+
+    // One code per line — the universal format card pools accept.
+    const content = selectedKeys.map((item) => item.key).join('\r\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    // Name file by the (shared) batch name + count, e.g. 充值10元-50个.txt
+    const batchName = selectedKeys[0]?.name || 'redemption';
+    a.href = url;
+    a.download = `${batchName}-${selectedKeys.length}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccess(
+      t('已导出 {{count}} 个兑换码', { count: selectedKeys.length }),
+    );
+  };
+
   // Batch delete redemption codes (clear invalid)
   const batchDeleteRedemptions = async () => {
     Modal.confirm({
@@ -352,6 +379,7 @@ export const useRedemptionsData = () => {
 
     // Batch operations
     batchCopyRedemptions,
+    batchExportRedemptions,
     batchDeleteRedemptions,
 
     // Translation function

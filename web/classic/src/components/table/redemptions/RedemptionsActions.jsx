@@ -25,6 +25,7 @@ const RedemptionsActions = ({
   setEditingRedemption,
   setShowEdit,
   batchCopyRedemptions,
+  batchExportRedemptions,
   batchDeleteRedemptions,
   t,
 }) => {
@@ -54,6 +55,15 @@ const RedemptionsActions = ({
         size='small'
       >
         {t('复制所选兑换码到剪贴板')}
+      </Button>
+
+      <Button
+        type='tertiary'
+        className='flex-1 md:flex-initial'
+        onClick={batchExportRedemptions}
+        size='small'
+      >
+        {t('导出所选为txt')}
       </Button>
 
       <Button

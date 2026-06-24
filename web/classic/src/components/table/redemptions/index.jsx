@@ -44,6 +44,7 @@ const RedemptionsPage = () => {
     setEditingRedemption,
     setShowEdit,
     batchCopyRedemptions,
+    batchExportRedemptions,
     batchDeleteRedemptions,
 
     // Filters state
@@ -86,6 +87,7 @@ const RedemptionsPage = () => {
               setEditingRedemption={setEditingRedemption}
               setShowEdit={setShowEdit}
               batchCopyRedemptions={batchCopyRedemptions}
+              batchExportRedemptions={batchExportRedemptions}
               batchDeleteRedemptions={batchDeleteRedemptions}
               t={t}
             />
