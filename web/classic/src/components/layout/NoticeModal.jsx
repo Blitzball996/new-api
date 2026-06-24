@@ -235,6 +235,7 @@ const NoticeModal = ({
       }
       visible={visible}
       onCancel={onClose}
+      centered
       footer={
         <div className='flex justify-end'>
           <Button type='secondary' onClick={handleCloseTodayNotice}>

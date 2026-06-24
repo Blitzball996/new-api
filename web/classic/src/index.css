@@ -743,6 +743,55 @@ html.dark .sbg-variant-green {
   -webkit-text-fill-color: transparent;
 }
 
+/* ==================== 主标题流光（始终可见，无透明段） ==================== */
+.hero-title-shine {
+  /* 浅色主题：深底色 + 紫金流光，全程不透明，字始终可读 */
+  background: linear-gradient(
+    100deg,
+    #1f1147 0%,
+    #1f1147 28%,
+    #5a1ac7 42%,
+    #e0a020 50%,
+    #5a1ac7 58%,
+    #1f1147 72%,
+    #1f1147 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #1f1147; /* 回退色：不支持 background-clip 时仍可见 */
+  animation: hero-sweep 8s linear infinite;
+}
+
+.dark .hero-title-shine {
+  background: linear-gradient(
+    100deg,
+    #f3f0ff 0%,
+    #f3f0ff 28%,
+    #a78bfa 42%,
+    #fcd34d 50%,
+    #a78bfa 58%,
+    #f3f0ff 72%,
+    #f3f0ff 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #f3f0ff;
+  animation: hero-sweep 8s linear infinite;
+}
+
+@keyframes hero-sweep {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -130% 0;
+  }
+}
+
 /* ==================== ScrollList 定制样式 ==================== */
 .semi-scrolllist,
 .semi-scrolllist * {
