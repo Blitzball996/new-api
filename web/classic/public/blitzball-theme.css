@@ -133,3 +133,20 @@ a.semi-link:hover,
 }
 
 
+
+/* ===== 强化覆盖:semi-ui 全局主色(亮+暗) ===== */
+body, body[theme-mode="dark"], :root {
+  --semi-color-primary: #5A1AC7 !important;
+  --semi-color-primary-hover: #4815A5 !important;
+  --semi-color-primary-active: #3A1183 !important;
+  --semi-color-link: #5A1AC7 !important;
+  --semi-color-focus-border: #5A1AC7 !important;
+}
+
+/* 主色文字/图标/边框通用覆盖 */
+.semi-button-primary,
+.semi-tabs-tab-active,
+.semi-navigation-item-selected,
+.semi-pagination-item-active {
+  --semi-color-primary: #5A1AC7 !important;
+}
