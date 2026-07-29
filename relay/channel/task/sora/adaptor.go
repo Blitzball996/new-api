@@ -66,12 +66,14 @@ type TaskAdaptor struct {
 	ChannelType int
 	apiKey      string
 	baseURL     string
+	newAPIVideo bool // 渠道开启「New API 兼容视频接口」：使用 /v1/video/generations 直通上游
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	a.ChannelType = info.ChannelType
 	a.baseURL = info.ChannelBaseUrl
 	a.apiKey = info.ApiKey
+	a.newAPIVideo = info.ChannelOtherSettings.OpenAIVideoNewAPIRelay
 }
 
 func validateRemixRequest(c *gin.Context) *dto.TaskError {
@@ -132,6 +134,10 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
+	}
+	if a.newAPIVideo {
+		// New API 兼容上游：保持 /v1/video/generations 路径直通，不改写为 OpenAI /v1/videos 格式
+		return fmt.Sprintf("%s/v1/video/generations", a.baseURL), nil
 	}
 	return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
 }
@@ -264,6 +270,10 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	}
 
 	uri := fmt.Sprintf("%s/v1/videos/%s", baseUrl, taskID)
+	if a.newAPIVideo {
+		// New API 兼容上游：查询接口为 /v1/video/generations/{task_id}
+		uri = fmt.Sprintf("%s/v1/video/generations/%s", baseUrl, taskID)
+	}
 
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
 	if err != nil {

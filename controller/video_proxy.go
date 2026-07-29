@@ -107,6 +107,11 @@ func VideoProxy(c *gin.Context) {
 			return
 		}
 	case constant.ChannelTypeOpenAI, constant.ChannelTypeSora:
+		if channel.GetOtherSettings().OpenAIVideoNewAPIRelay {
+			// New API 兼容上游：轮询阶段已将直链视频地址存入 ResultURL
+			videoURL = task.GetResultURL()
+			break
+		}
 		videoURL = fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID())
 		req.Header.Set("Authorization", "Bearer "+channel.Key)
 	default:

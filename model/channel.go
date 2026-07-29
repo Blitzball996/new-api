@@ -103,10 +103,18 @@ func NewChannelSortOptions(sortBy string, sortOrder string, idSort bool) Channel
 
 func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
 	if columnName, ok := channelSortColumns[options.SortBy]; ok {
-		return query.Order(clause.OrderByColumn{
+		query = query.Order(clause.OrderByColumn{
 			Column: clause.Column{Name: columnName},
 			Desc:   options.SortOrder != "asc",
 		})
+		if columnName != "id" {
+			// 附加 id 作为第二排序键，保证分页时顺序稳定（相同值的行不会在翻页间重复/丢失）
+			query = query.Order(clause.OrderByColumn{
+				Column: clause.Column{Name: "id"},
+				Desc:   true,
+			})
+		}
+		return query
 	}
 	if options.IDSort {
 		return query.Order(clause.OrderByColumn{
@@ -116,6 +124,9 @@ func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
 	}
 	return query.Order(clause.OrderByColumn{
 		Column: clause.Column{Name: "priority"},
+		Desc:   true,
+	}).Order(clause.OrderByColumn{
+		Column: clause.Column{Name: "id"},
 		Desc:   true,
 	})
 }

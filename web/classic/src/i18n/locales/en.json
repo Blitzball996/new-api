@@ -3826,6 +3826,8 @@
     "并确认自行承担部署": "confirm that I bear legal responsibility arising from deployment",
     "运营和收费行为产生的法律责任": "operation and charging behavior",
     "，": ", ",
-    "、": ", "
+    "、": ", ",
+    "视频接口直通 New API 上游": "Video API pass-through to New API upstream",
+    "开启后，视频生成任务将直接请求 {API地址}/v1/video/generations（New API 兼容中转站格式），查询使用 /v1/video/generations/{task_id}；关闭时使用 OpenAI 官方 /v1/videos 格式。chat 等其他接口不受影响": "When enabled, video generation tasks request {base_url}/v1/video/generations directly (New API compatible relay format) and query via /v1/video/generations/{task_id}; when disabled, the official OpenAI /v1/videos format is used. Chat and other endpoints are unaffected"
   }
 }
