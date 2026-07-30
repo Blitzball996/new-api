@@ -3,11 +3,7 @@ package controller
 import (
 	"errors"
 	"fmt"
-	"net/http"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -57,40 +53,4 @@ func Playground(c *gin.Context) {
 	_ = middleware.SetupContextForToken(c, tempToken)
 
 	Relay(c, types.RelayFormatOpenAI)
-}
-
-// PlaygroundVideo 视频操练场（0帧起手）提交入口：
-// 复用会话登录态，与 Playground 相同的临时令牌方式走 RelayTask 流程。
-func PlaygroundVideo(c *gin.Context) {
-	useAccessToken := c.GetBool("use_access_token")
-	if useAccessToken {
-		c.JSON(http.StatusForbidden, &dto.TaskError{
-			Code:       "access_denied",
-			Message:    "暂不支持使用 access token",
-			StatusCode: http.StatusForbidden,
-		})
-		return
-	}
-
-	userId := c.GetInt("id")
-	userCache, err := model.GetUserCache(userId)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, &dto.TaskError{
-			Code:       "query_user_failed",
-			Message:    err.Error(),
-			StatusCode: http.StatusInternalServerError,
-		})
-		return
-	}
-	userCache.WriteContext(c)
-
-	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-	tempToken := &model.Token{
-		UserId: userId,
-		Name:   fmt.Sprintf("playground-video-%s", usingGroup),
-		Group:  usingGroup,
-	}
-	_ = middleware.SetupContextForToken(c, tempToken)
-
-	RelayTask(c)
 }

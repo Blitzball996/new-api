@@ -23,6 +23,7 @@ import {
   Button,
   Card,
   Empty,
+  Input,
   InputNumber,
   Select,
   Spin,
@@ -40,6 +41,7 @@ import {
 
 const { Text, Title } = Typography;
 
+const TOKEN_STORAGE_KEY = 'videostudio_token';
 const POLL_INTERVAL_MS = 5000;
 const TERMINAL_STATUSES = ['SUCCESS', 'FAILURE'];
 const MAX_DURATION_SECONDS = 15;
@@ -86,6 +88,9 @@ const VideoStudio = () => {
   const { t } = useTranslation();
   const [userState] = useContext(UserContext);
 
+  const [token, setToken] = useState(
+    () => localStorage.getItem(TOKEN_STORAGE_KEY) || '',
+  );
   const [models, setModels] = useState([]);
   const [model, setModel] = useState('');
   const [groups, setGroups] = useState([]);
@@ -98,17 +103,42 @@ const VideoStudio = () => {
   const [task, setTask] = useState(null);
   const pollTimerRef = useRef(null);
 
-  // 与操练场一致：登录态直接拉取当前用户可用的模型与分组
+  const authHeaders = useCallback(() => {
+    let key = token.trim();
+    if (key && !key.startsWith('sk-')) {
+      key = `sk-${key}`;
+    }
+    return {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    };
+  }, [token]);
+
+  // 令牌变化时持久化，方便下次直接使用
+  useEffect(() => {
+    if (token.trim()) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token.trim());
+    }
+  }, [token]);
+
+  // 用用户的令牌拉取该令牌可用的模型列表（计费也归属该令牌）
   const loadModels = useCallback(async () => {
+    if (!token.trim()) {
+      showError(t('请先填写令牌'));
+      return;
+    }
     try {
-      const res = await API.get('/api/user/models');
-      const { success, message, data } = res.data;
-      if (!success) {
-        showError(t(message || '加载模型失败'));
+      const res = await API.get('/v1/models', {
+        headers: authHeaders(),
+        skipErrorHandler: true,
+      });
+      const list = res?.data?.data;
+      if (!Array.isArray(list)) {
+        showError(t('加载模型失败'));
         return;
       }
-      const ids = Array.isArray(data) ? data.filter(Boolean) : [];
-      // 视频模型排前面，其余模型也保留，支持手动输入任意模型
+      const ids = list.map((item) => item?.id).filter(Boolean);
+      // 视频模型排前面，其余模型也保留，另外支持手动输入任意模型
       const videoIds = ids.filter(isVideoModel).sort();
       const otherIds = ids.filter((id) => !isVideoModel(id)).sort();
       const options = [...videoIds, ...otherIds].map((id) => ({
@@ -116,36 +146,42 @@ const VideoStudio = () => {
         value: id,
       }));
       setModels(options);
-      if (videoIds.length > 0) {
-        setModel((current) => current || videoIds[0]);
+      if (options.length === 0) {
+        showError(t('该令牌下没有可用模型'));
+        return;
       }
+      setModel((current) => current || videoIds[0] || options[0].value);
+      showSuccess(t('模型列表已更新'));
     } catch (error) {
-      showError(t('加载模型失败'));
+      showError(
+        error?.response?.data?.error?.message || t('加载模型失败，请检查令牌'),
+      );
     }
-  }, [t]);
+  }, [token, authHeaders, t]);
 
+  // 分组列表来自登录会话（页面在控制台内，始终已登录）
   const loadGroups = useCallback(async () => {
     try {
       const res = await API.get('/api/user/self/groups');
-      const { success, message, data } = res.data;
-      if (!success) {
-        showError(t(message || '加载分组失败'));
-        return;
-      }
+      const { success, data } = res.data;
+      if (!success) return;
       const userGroup =
-        userState?.user?.group || JSON.parse(localStorage.getItem('user') || '{}')?.group;
+        userState?.user?.group ||
+        JSON.parse(localStorage.getItem('user') || '{}')?.group;
       const groupOptions = processGroupsData(data, userGroup);
       setGroups(groupOptions);
-      setGroup((current) => current || groupOptions[0]?.value || '');
     } catch (error) {
-      showError(t('加载分组失败'));
+      // 分组加载失败不阻塞主流程，默认使用令牌自身分组
     }
-  }, [userState, t]);
+  }, [userState]);
 
   useEffect(() => {
-    loadModels();
     loadGroups();
-  }, [loadModels, loadGroups]);
+    if (token.trim()) {
+      loadModels();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -156,19 +192,18 @@ const VideoStudio = () => {
 
   useEffect(() => stopPolling, [stopPolling]);
 
-  // 轮询任务状态，直到任务结束
+  // 用令牌轮询任务状态，直到任务结束
   const startPolling = useCallback(
     (taskId) => {
       stopPolling();
       pollTimerRef.current = setInterval(async () => {
         try {
-          const res = await API.get(`/api/task/self?task_id=${taskId}`, {
+          const res = await API.get(`/v1/video/generations/${taskId}`, {
+            headers: authHeaders(),
             skipErrorHandler: true,
           });
-          const items = res?.data?.data?.items;
-          const data = Array.isArray(items)
-            ? items.find((item) => item.task_id === taskId)
-            : null;
+          // 接口返回 { code: 'success', data: TaskDto }
+          const data = res?.data?.data;
           if (!data) return;
           setTask((prev) => ({ ...prev, ...data }));
           if (TERMINAL_STATUSES.includes(data.status)) {
@@ -184,10 +219,14 @@ const VideoStudio = () => {
         }
       }, POLL_INTERVAL_MS);
     },
-    [stopPolling, t],
+    [authHeaders, stopPolling, t],
   );
 
   const handleSubmit = async () => {
+    if (!token.trim()) {
+      showError(t('请先填写令牌'));
+      return;
+    }
     if (!model || !model.trim()) {
       showError(t('请选择或输入视频模型'));
       return;
@@ -213,7 +252,8 @@ const VideoStudio = () => {
       if (group) {
         payload.group = group;
       }
-      const res = await API.post('/pg-video/generations', payload, {
+      const res = await API.post('/v1/video/generations', payload, {
+        headers: authHeaders(),
         skipErrorHandler: true,
       });
       const data = res?.data;
@@ -250,10 +290,24 @@ const VideoStudio = () => {
             </Title>
           </div>
           <Text type='tertiary'>
-            {t('选择视频模型和分组，描述你想要的画面即可生成视频。')}
+            {t('输入你的令牌，选择视频模型，描述你想要的画面即可生成视频，费用从该令牌扣除。')}
           </Text>
 
           <div className='mt-4 flex flex-col gap-4'>
+            <div>
+              <Text strong>{t('令牌')}</Text>
+              <div className='mt-1 flex gap-2'>
+                <Input
+                  mode='password'
+                  value={token}
+                  onChange={setToken}
+                  placeholder='sk-...'
+                  className='flex-1'
+                />
+                <Button onClick={loadModels}>{t('加载模型')}</Button>
+              </div>
+            </div>
+
             <div className='flex flex-col sm:flex-row gap-4'>
               <div className='flex-1'>
                 <Text strong>{t('视频模型')}</Text>
@@ -268,13 +322,14 @@ const VideoStudio = () => {
                 />
               </div>
               <div className='flex-1'>
-                <Text strong>{t('分组')}</Text>
+                <Text strong>{t('分组（可选）')}</Text>
                 <Select
                   value={group}
                   onChange={setGroup}
                   optionList={groups}
                   filter
-                  placeholder={t('选择分组')}
+                  showClear
+                  placeholder={t('默认使用令牌分组')}
                   className='mt-1 w-full'
                 />
               </div>
