@@ -66,6 +66,14 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundRouter.POST("/chat/completions", controller.Playground)
 	}
+	// 视频操练场（0帧起手）：会话登录态提交视频生成任务
+	playgroundVideoRouter := router.Group("/pg-video")
+	playgroundVideoRouter.Use(middleware.RouteTag("relay"))
+	playgroundVideoRouter.Use(middleware.SystemPerformanceCheck())
+	playgroundVideoRouter.Use(middleware.UserAuth(), middleware.PlaygroundVideoConvert(), middleware.Distribute())
+	{
+		playgroundVideoRouter.POST("/generations", controller.PlaygroundVideo)
+	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())

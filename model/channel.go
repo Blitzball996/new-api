@@ -111,7 +111,6 @@ func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
 			// 附加 id 作为第二排序键，保证分页时顺序稳定（相同值的行不会在翻页间重复/丢失）
 			query = query.Order(clause.OrderByColumn{
 				Column: clause.Column{Name: "id"},
-				Desc:   true,
 			})
 		}
 		return query
@@ -127,7 +126,6 @@ func (options ChannelSortOptions) Apply(query *gorm.DB) *gorm.DB {
 		Desc:   true,
 	}).Order(clause.OrderByColumn{
 		Column: clause.Column{Name: "id"},
-		Desc:   true,
 	})
 }
 

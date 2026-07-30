@@ -83,8 +83,9 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// check path is /pg/chat/completions
-				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
+				// check path is /pg/chat/completions or video generations submit
+				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") ||
+					(c.Request.Method == http.MethodPost && strings.Contains(c.Request.URL.Path, "/v1/video/generations")) {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
 					if err != nil {
