@@ -310,9 +310,28 @@ type imageTaskEnvelope struct {
 		PollPath string `json:"poll_path"`
 		PollURL  string `json:"poll_url"`
 	} `json:"metadata"`
-	Error *struct {
+	// Error may be a plain string or an object {message: ...} depending on
+	// the upstream, so keep it raw and parse lazily.
+	Error json.RawMessage `json:"error"`
+}
+
+// errorMessage extracts a human-readable message from the raw error field,
+// accepting both string and {message: string} shapes.
+func (e *imageTaskEnvelope) errorMessage() string {
+	if len(e.Error) == 0 || string(e.Error) == "null" {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(e.Error, &s); err == nil {
+		return s
+	}
+	var obj struct {
 		Message string `json:"message"`
-	} `json:"error"`
+	}
+	if err := json.Unmarshal(e.Error, &obj); err == nil && obj.Message != "" {
+		return obj.Message
+	}
+	return string(e.Error)
 }
 
 // extractImagePollTargets returns candidate poll URLs (channel base + path
@@ -430,8 +449,8 @@ func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, targets []
 			return body, nil
 		case "failed", "failure", "cancelled":
 			msg := "image generation task failed"
-			if env.Error != nil && env.Error.Message != "" {
-				msg = env.Error.Message
+			if m := env.errorMessage(); m != "" {
+				msg = m
 			}
 			return nil, types.WithOpenAIError(types.OpenAIError{
 				Message: msg,
