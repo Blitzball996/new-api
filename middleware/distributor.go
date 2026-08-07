@@ -336,7 +336,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if _, ok := c.Get("relay_mode"); !ok {
 			c.Set("relay_mode", relayMode)
 		}
-	} else if strings.Contains(c.Request.URL.Path, "/v1/image/generations") {
+	} else if strings.Contains(c.Request.URL.Path, "/v1/imagetask/generations") {
 		relayMode := relayconstant.RelayModeUnknown
 		if c.Request.Method == http.MethodPost {
 			req, err := getModelFromRequest(c)

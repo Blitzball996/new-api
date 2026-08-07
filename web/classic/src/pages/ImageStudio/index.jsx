@@ -146,7 +146,7 @@ const ImageStudio = () => {
     stopPolling();
     pollTimerRef.current = setInterval(async () => {
       try {
-        const res = await API.get(`/v1/image/generations/${taskId}`, {
+        const res = await API.get(`/v1/imagetask/generations/${taskId}`, {
           headers: authHeaders(),
           skipErrorHandler: true,
         });
@@ -201,7 +201,7 @@ const ImageStudio = () => {
       if (group) payload.group = group;
       if (refImages.length > 0) payload.image = refImages.map((r) => r.dataUrl);
 
-      const res = await API.post('/v1/image/generations', payload, {
+      const res = await API.post('/v1/imagetask/generations', payload, {
         headers: authHeaders(),
         skipErrorHandler: true,
       });
