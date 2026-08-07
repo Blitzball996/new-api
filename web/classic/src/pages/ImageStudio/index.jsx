@@ -212,9 +212,10 @@ const ImageStudio = () => {
       });
 
       const data = res?.data;
+      console.log('[ImageStudio] response:', JSON.stringify(data));
       if (data?.error) { showError(data.error?.message || t('生成失败')); return; }
       const images = data?.data || [];
-      if (!images.length) { showError(t('未返回图片')); return; }
+      if (!images.length) { showError(t('未返回图片') + ' raw:' + JSON.stringify(data)); return; }
 
       const entry = {
         id: Date.now(),
