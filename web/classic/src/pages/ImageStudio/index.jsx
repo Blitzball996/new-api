@@ -158,21 +158,22 @@ const ImageStudio = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleRefImageAdd = async (file) => {
-    if (refImages.length >= MAX_REF_IMAGES) {
-      showError(t('最多上传 6 张参考图'));
-      return false;
+  const handleRefImageChange = useCallback(async ({ fileList }) => {
+    // fileList 是 Semi Upload 维护的全量列表，每项有 fileInstance（原生 File）
+    const results = [];
+    for (const item of fileList) {
+      const rawFile = item.fileInstance;
+      if (!rawFile) continue;
+      if (results.length >= MAX_REF_IMAGES) break;
+      try {
+        const dataUrl = await fileToBase64(rawFile);
+        results.push({ dataUrl, name: rawFile.name || 'image' });
+      } catch {
+        showError(t('图片读取失败：') + (rawFile.name || ''));
+      }
     }
-    // Semi UI beforeUpload 传入的是包装对象，取 fileInstance 才是原生 File
-    const rawFile = file?.fileInstance || file;
-    try {
-      const dataUrl = await fileToBase64(rawFile);
-      setRefImages((prev) => [...prev, { dataUrl, name: rawFile.name || 'image' }]);
-    } catch {
-      showError(t('图片读取失败'));
-    }
-    return false;
-  };
+    setRefImages(results);
+  }, [t]);
 
   const handleRefImageRemove = (idx) => {
     setRefImages((prev) => prev.filter((_, i) => i !== idx));
@@ -299,27 +300,18 @@ const ImageStudio = () => {
             </div>
             <div>
               <Text strong>{t('参考图（最多 6 张，可选）')}</Text>
-              <div className='mt-1 flex flex-wrap gap-2 items-start'>
-                {refImages.map((img, idx) => (
-                  <div key={idx} className='relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0'>
-                    <img src={img.dataUrl} alt={img.name} className='w-full h-full object-cover' />
-                    <button
-                      className='absolute top-0.5 right-0.5 bg-black bg-opacity-50 rounded-full p-0.5 text-white hover:bg-opacity-80'
-                      onClick={() => handleRefImageRemove(idx)}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-                {refImages.length < MAX_REF_IMAGES && (
-                  <Upload accept='image/*' showUploadList={false} beforeUpload={handleRefImageAdd} action='' className='inline-block'>
-                    <div className='w-20 h-20 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 text-gray-400 hover:text-blue-400 transition-colors'>
-                      <span className='text-2xl leading-none'>+</span>
-                      <span className='text-xs mt-1'>{t('添加图片')}</span>
-                    </div>
-                  </Upload>
-                )}
-              </div>
+              <Upload
+                accept='image/*'
+                multiple
+                limit={MAX_REF_IMAGES}
+                action=''
+                beforeUpload={() => false}
+                onChange={handleRefImageChange}
+                listType='picture'
+                className='mt-1'
+              >
+                <Button icon={<span>+</span>}>{t('添加参考图')}</Button>
+              </Upload>
             </div>
             <Button theme='solid' size='large' loading={submitting} onClick={handleSubmit}>
               {submitting ? t('生成中...') : t('开始生成')}
