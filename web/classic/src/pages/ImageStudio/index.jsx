@@ -186,7 +186,10 @@ const ImageStudio = () => {
       const options = [...imgIds, ...otherIds].map((id) => ({ label: id, value: id }));
       setModels(options);
       if (!options.length) { showError(t('该令牌下没有可用模型')); return; }
-      setModel((cur) => cur || imgIds[0] || options[0].value);
+      // 默认优先 gpt-image-2-pro
+      const preferred = ids.find((id) => id === 'gpt-image-2-pro')
+        || ids.find((id) => String(id).toLowerCase().includes('gpt-image-2-pro'));
+      setModel((cur) => cur || preferred || imgIds[0] || options[0].value);
       showSuccess(t('模型列表已更新'));
     } catch (e) {
       showError(e?.response?.data?.error?.message || t('加载模型失败，请检查令牌'));
@@ -199,7 +202,20 @@ const ImageStudio = () => {
       const { success, data } = res.data;
       if (!success) return;
       const userGroup = userState?.user?.group || JSON.parse(localStorage.getItem('user') || '{}')?.group;
-      setGroups(processGroupsData(data, userGroup));
+      // 展示分组名称而非分组注释（processGroupsData 的 label 取的是 desc）
+      const opts = processGroupsData(data, userGroup).map((g) => ({
+        ...g,
+        label: g.value || g.label,
+      }));
+      setGroups(opts);
+      // 默认选中含 image 的分组
+      setGroup((cur) => {
+        if (cur) return cur;
+        const imageGroup = opts.find((g) =>
+          String(g.value || '').toLowerCase().includes('image'),
+        );
+        return imageGroup ? imageGroup.value : cur;
+      });
     } catch {}
   }, [userState]);
 
