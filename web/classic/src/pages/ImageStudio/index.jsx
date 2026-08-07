@@ -29,15 +29,43 @@ const REQUEST_TIMEOUT_MS = 600000;
 const supportsRefImage = (id) => id.toLowerCase().includes('pro');
 
 // 从同步响应中提取图片地址，优先 url，其次 b64_json 兜底
+// 把单个条目归一化为可直接渲染的地址
+const normalizeImageItem = (item) => {
+  if (!item) return null;
+  if (typeof item === 'string') return item;
+  if (item.url) return item.url;
+  if (item.image_url) return item.image_url;
+  if (item.b64_json) return `data:image/png;base64,${item.b64_json}`;
+  if (item.base64) return `data:image/png;base64,${item.base64}`;
+  return null;
+};
+
+// 上游同步响应标准结构是 data[]，但部分兼容实现会放在 images[] / output[] /
+// data.data[]，或直接返回裸 URL 字符串，这里逐一兜底。
 const extractImageUrls = (data) => {
-  const list = Array.isArray(data?.data) ? data.data : [];
-  return list
-    .map((item) => {
-      if (item?.url) return item.url;
-      if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
-      return null;
-    })
-    .filter(Boolean);
+  if (!data) return [];
+  if (typeof data === 'string') {
+    return data.startsWith('http') || data.startsWith('data:') ? [data] : [];
+  }
+
+  const candidates = [
+    data.data,
+    data.images,
+    data.output,
+    data.results,
+    data?.data?.data,
+    data?.data?.images,
+  ];
+
+  for (const list of candidates) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const urls = list.map(normalizeImageItem).filter(Boolean);
+    if (urls.length) return urls;
+  }
+
+  // 单图直挂在顶层的情况
+  const single = normalizeImageItem(data);
+  return single ? [single] : [];
 };
 
 // 比例通过 prompt 传递，上游 size 只接受 1K/2K/4K
@@ -199,8 +227,16 @@ const ImageStudio = () => {
       const data = res?.data;
       const urls = extractImageUrls(data);
       if (!urls.length) {
+        // 上游没有返回可用图片地址：把原始响应打到控制台，便于定位是结构不符还是上游报错
+        console.error('[ImageStudio] 无法解析图片地址，上游原始响应：', data);
+        const upstreamMsg =
+          data?.error?.message ||
+          data?.message ||
+          (typeof data === 'string' ? data : '');
         showError(
-          data?.error?.message || data?.message || t('生成失败，响应中没有图片地址'),
+          upstreamMsg
+            ? t('生成失败：') + upstreamMsg
+            : t('生成失败，响应中没有图片地址（详见控制台 F12）'),
         );
         return;
       }
