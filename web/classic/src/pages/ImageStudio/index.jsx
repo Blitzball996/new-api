@@ -9,6 +9,7 @@ License, or (at your option) any later version.
 
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import axios from 'axios';
 import {
   Button,
   Card,
@@ -36,7 +37,7 @@ const { Text, Title } = Typography;
 const TOKEN_STORAGE_KEY = 'imagestudio_token';
 const HISTORY_STORAGE_KEY = 'imagestudio_history';
 const MAX_HISTORY = 50;
-const MAX_REF_IMAGES = 4;
+const MAX_REF_IMAGES = 6;
 
 const SIZE_OPTIONS = [
   { label: '16:9', value: '16:9' },
@@ -120,7 +121,12 @@ const ImageStudio = () => {
   const loadModels = useCallback(async () => {
     if (!token.trim()) { showError(t('请先填写令牌')); return; }
     try {
-      const res = await API.get('/v1/models', { headers: authHeaders(), skipErrorHandler: true });
+      let key = token.trim();
+      if (!key.startsWith('sk-')) key = `sk-${key}`;
+      const baseURL = window.location.origin;
+      const res = await axios.get(`${baseURL}/v1/models`, {
+        headers: { Authorization: `Bearer ${key}` },
+      });
       const list = res?.data?.data;
       if (!Array.isArray(list)) { showError(t('加载模型失败')); return; }
       const ids = list.map((item) => item?.id).filter(Boolean);
@@ -134,7 +140,7 @@ const ImageStudio = () => {
     } catch (e) {
       showError(e?.response?.data?.error?.message || t('加载模型失败，请检查令牌'));
     }
-  }, [token, authHeaders, t]);
+  }, [token, t]);
 
   const loadGroups = useCallback(async () => {
     try {
@@ -154,12 +160,14 @@ const ImageStudio = () => {
 
   const handleRefImageAdd = async (file) => {
     if (refImages.length >= MAX_REF_IMAGES) {
-      showError(t('最多上传 4 张参考图'));
+      showError(t('最多上传 6 张参考图'));
       return false;
     }
+    // Semi UI beforeUpload 传入的是包装对象，取 fileInstance 才是原生 File
+    const rawFile = file?.fileInstance || file;
     try {
-      const dataUrl = await fileToBase64(file);
-      setRefImages((prev) => [...prev, { dataUrl, name: file.name }]);
+      const dataUrl = await fileToBase64(rawFile);
+      setRefImages((prev) => [...prev, { dataUrl, name: rawFile.name || 'image' }]);
     } catch {
       showError(t('图片读取失败'));
     }
@@ -178,10 +186,15 @@ const ImageStudio = () => {
     setSubmitting(true);
     setResult(null);
     try {
+      let key = token.trim();
+      if (!key.startsWith('sk-')) key = `sk-${key}`;
+
+      // prompt 末尾附加比例描述，size 字段传分辨率（1K/2K/4K）
+      const fullPrompt = `${prompt.trim()}，${size}`;
       const payload = {
         model: model.trim(),
-        prompt: prompt.trim(),
-        size: resolution || size,
+        prompt: fullPrompt,
+        size: resolution,
         n: count,
       };
       if (group) payload.group = group;
@@ -189,10 +202,14 @@ const ImageStudio = () => {
         payload.image = refImages.map((r) => r.dataUrl);
       }
 
-      const res = await API.post('/v1/images/generations', payload, {
-        headers: authHeaders(),
-        skipErrorHandler: true,
+      const baseURL = window.location.origin;
+      const res = await axios.post(`${baseURL}/v1/images/generations`, payload, {
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
       });
+
       const data = res?.data;
       if (data?.error) { showError(data.error?.message || t('生成失败')); return; }
       const images = data?.data || [];
@@ -281,7 +298,7 @@ const ImageStudio = () => {
               <TextArea value={prompt} onChange={setPrompt} rows={4} maxCount={2000} placeholder={t('描述你想生成的画面，例如：一只猫在雪地里奔跑')} className='mt-1' />
             </div>
             <div>
-              <Text strong>{t('参考图（最多 4 张，可选）')}</Text>
+              <Text strong>{t('参考图（最多 6 张，可选）')}</Text>
               <div className='mt-1 flex flex-wrap gap-2 items-start'>
                 {refImages.map((img, idx) => (
                   <div key={idx} className='relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0'>
