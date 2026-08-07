@@ -29,6 +29,17 @@ func OpenaiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 
+	// 部分兼容上游（如 gpt-image-2）名义上同步，实际首次返回异步任务壳：
+	// object=image.generation.task, data=[], 带 poll_path。此时在网关侧轮询
+	// 直至出图，保持对客户端的同步语义。
+	if pollPath := extractImagePollPath(responseBody); pollPath != "" {
+		polledBody, pollErr := pollOpenaiImageTask(c, info, pollPath)
+		if pollErr != nil {
+			return nil, pollErr
+		}
+		responseBody = polledBody
+	}
+
 	var usageResp dto.SimpleResponse
 	err = common.Unmarshal(responseBody, &usageResp)
 	if err != nil {
@@ -284,4 +295,122 @@ func writeOpenaiImageStreamDone(c *gin.Context) error {
 		return err
 	}
 	return helper.FlushWriter(c)
+}
+
+// imageTaskEnvelope describes the async task shell some compatible
+// upstreams (e.g. gpt-image-2) return from /v1/images/generations.
+type imageTaskEnvelope struct {
+	Object   string          `json:"object"`
+	Status   string          `json:"status"`
+	PollPath string          `json:"poll_path"`
+	Data     json.RawMessage `json:"data"`
+	Metadata struct {
+		Status   string `json:"status"`
+		PollPath string `json:"poll_path"`
+	} `json:"metadata"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// extractImagePollPath returns the poll path if the body is a non-terminal
+// async task shell, otherwise an empty string.
+func extractImagePollPath(body []byte) string {
+	var env imageTaskEnvelope
+	if err := common.Unmarshal(body, &env); err != nil {
+		return ""
+	}
+	if env.Object != "image.generation.task" {
+		return ""
+	}
+	status := env.Status
+	if status == "" {
+		status = env.Metadata.Status
+	}
+	switch status {
+	case "succeeded", "success", "completed", "failed", "failure":
+		return "" // terminal state, handle original body as-is
+	}
+	if env.PollPath != "" {
+		return env.PollPath
+	}
+	return env.Metadata.PollPath
+}
+
+// pollOpenaiImageTask polls the upstream task until a terminal state and
+// returns the final body, keeping the client-facing call synchronous.
+// Bounded by RELAY_TIMEOUT (default 5 minutes when unset).
+func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, pollPath string) ([]byte, *types.NewAPIError) {
+	deadline := 5 * time.Minute
+	if common.RelayTimeout > 0 {
+		deadline = time.Duration(common.RelayTimeout) * time.Second
+	}
+	pollURL := strings.TrimSuffix(info.ChannelBaseUrl, "/") + pollPath
+
+	client := service.GetHttpClient()
+	start := time.Now()
+	interval := 2 * time.Second
+
+	for {
+		if time.Since(start) > deadline {
+			return nil, types.NewOpenAIError(
+				fmt.Errorf("image task polling timed out after %s", deadline),
+				types.ErrorCodeDoRequestFailed, http.StatusGatewayTimeout)
+		}
+		select {
+		case <-c.Request.Context().Done():
+			return nil, types.NewOpenAIError(c.Request.Context().Err(),
+				types.ErrorCodeDoRequestFailed, http.StatusBadGateway)
+		case <-time.After(interval):
+		}
+
+		req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, pollURL, nil)
+		if err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
+		}
+		req.Header.Set("Authorization", "Bearer "+info.ApiKey)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusBadGateway)
+		}
+		body, err := io.ReadAll(resp.Body)
+		service.CloseResponseBodyGracefully(resp)
+		if err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, types.WithOpenAIError(types.OpenAIError{
+				Message: fmt.Sprintf("image task poll failed with status %d", resp.StatusCode),
+				Type:    "upstream_error",
+			}, resp.StatusCode)
+		}
+
+		var env imageTaskEnvelope
+		if err := common.Unmarshal(body, &env); err != nil {
+			return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+		}
+		status := env.Status
+		if status == "" {
+			status = env.Metadata.Status
+		}
+		switch status {
+		case "succeeded", "success", "completed":
+			return body, nil
+		case "failed", "failure", "cancelled":
+			msg := "image generation task failed"
+			if env.Error != nil && env.Error.Message != "" {
+				msg = env.Error.Message
+			}
+			return nil, types.WithOpenAIError(types.OpenAIError{
+				Message: msg,
+				Type:    "upstream_error",
+			}, http.StatusBadGateway)
+		}
+		// non-terminal (processing/queued): if data already carries images, return early
+		if len(env.Data) > 2 { // longer than "[]"
+			return body, nil
+		}
+		logger.LogDebug(c, fmt.Sprintf("image task %s still %s, polling again", pollPath, status))
+	}
 }
