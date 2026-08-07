@@ -49,6 +49,7 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   videostudio: '/console/videostudio',
+  imagestudio: '/console/imagestudio',
   personal: '/console/personal',
 };
 
@@ -212,6 +213,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('0帧起手'),
         itemKey: 'videostudio',
         to: '/videostudio',
+      },
+      {
+        text: t('0帧生图'),
+        itemKey: 'imagestudio',
+        to: '/imagestudio',
       },
       {
         text: t('聊天'),

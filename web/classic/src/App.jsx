@@ -45,6 +45,7 @@ import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
 import VideoStudio from './pages/VideoStudio';
+import ImageStudio from './pages/ImageStudio';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
@@ -161,6 +162,14 @@ function App() {
           element={
             <PrivateRoute>
               <VideoStudio />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/imagestudio'
+          element={
+            <PrivateRoute>
+              <ImageStudio />
             </PrivateRoute>
           }
         />

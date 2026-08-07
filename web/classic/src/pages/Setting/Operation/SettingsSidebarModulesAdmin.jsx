@@ -44,6 +44,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       enabled: true,
       playground: true,
       videostudio: true,
+      imagestudio: true,
       chat: true,
     },
     console: {
@@ -106,6 +107,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         enabled: true,
         playground: true,
         videostudio: true,
+        imagestudio: true,
         chat: true,
       },
       console: {
@@ -184,6 +186,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             enabled: true,
             playground: true,
             videostudio: true,
+            imagestudio: true,
             chat: true,
           },
           console: {
@@ -227,6 +230,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'videostudio',
           title: t('0帧起手'),
           description: t('视频生成'),
+        },
+        {
+          key: 'imagestudio',
+          title: t('0帧生图'),
+          description: t('图片生成'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],

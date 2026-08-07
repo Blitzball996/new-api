@@ -169,6 +169,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			info.RelayMode != relayconstant.RelayModeResponsesCompact {
 			return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
 		}
+		// 图片生成直通 New API 兼容上游：强制使用 /v1/images/generations
+		if info.RelayMode == relayconstant.RelayModeImagesGenerations &&
+			info.ChannelOtherSettings.OpenAIImageNewAPIRelay {
+			return fmt.Sprintf("%s/v1/images/generations", info.ChannelBaseUrl), nil
+		}
 		return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType), nil
 	}
 }

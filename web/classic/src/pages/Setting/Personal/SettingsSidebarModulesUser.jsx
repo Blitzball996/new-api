@@ -74,6 +74,7 @@ export default function SettingsSidebarModulesUser() {
         enabled: true,
         playground: isSidebarModuleAllowed('chat', 'playground'),
         videostudio: isSidebarModuleAllowed('chat', 'videostudio'),
+        imagestudio: isSidebarModuleAllowed('chat', 'imagestudio'),
         chat: isSidebarModuleAllowed('chat', 'chat'),
       };
     }
@@ -305,6 +306,11 @@ export default function SettingsSidebarModulesUser() {
           key: 'videostudio',
           title: t('0帧起手'),
           description: t('视频生成'),
+        },
+        {
+          key: 'imagestudio',
+          title: t('0帧生图'),
+          description: t('图片生成'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],

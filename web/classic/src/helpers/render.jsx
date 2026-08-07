@@ -81,6 +81,7 @@ import {
   Server,
   CalendarClock,
   Clapperboard,
+  ImageIcon,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -128,6 +129,8 @@ export function getLucideIcon(key, selected = false) {
       return <TerminalSquare {...commonProps} color={iconColor} />;
     case 'videostudio':
       return <Clapperboard {...commonProps} color={iconColor} />;
+    case 'imagestudio':
+      return <ImageIcon {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
     case 'token':
