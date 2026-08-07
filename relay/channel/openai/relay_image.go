@@ -32,8 +32,8 @@ func OpenaiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 	// 部分兼容上游（如 gpt-image-2）名义上同步，实际首次返回异步任务壳：
 	// object=image.generation.task, data=[], 带 poll_path。此时在网关侧轮询
 	// 直至出图，保持对客户端的同步语义。
-	if pollPath := extractImagePollPath(responseBody); pollPath != "" {
-		polledBody, pollErr := pollOpenaiImageTask(c, info, pollPath)
+	if targets := extractImagePollTargets(responseBody, info.ChannelBaseUrl); len(targets) > 0 {
+		polledBody, pollErr := pollOpenaiImageTask(c, info, targets)
 		if pollErr != nil {
 			return nil, pollErr
 		}
@@ -303,25 +303,28 @@ type imageTaskEnvelope struct {
 	Object   string          `json:"object"`
 	Status   string          `json:"status"`
 	PollPath string          `json:"poll_path"`
+	PollURL  string          `json:"poll_url"`
 	Data     json.RawMessage `json:"data"`
 	Metadata struct {
 		Status   string `json:"status"`
 		PollPath string `json:"poll_path"`
+		PollURL  string `json:"poll_url"`
 	} `json:"metadata"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }
 
-// extractImagePollPath returns the poll path if the body is a non-terminal
-// async task shell, otherwise an empty string.
-func extractImagePollPath(body []byte) string {
+// extractImagePollTargets returns candidate poll URLs (channel base + path
+// first, then the upstream-advertised absolute poll_url) if the body is a
+// non-terminal async task shell, otherwise nil.
+func extractImagePollTargets(body []byte, channelBaseURL string) []string {
 	var env imageTaskEnvelope
 	if err := common.Unmarshal(body, &env); err != nil {
-		return ""
+		return nil
 	}
 	if env.Object != "image.generation.task" {
-		return ""
+		return nil
 	}
 	status := env.Status
 	if status == "" {
@@ -329,27 +332,42 @@ func extractImagePollPath(body []byte) string {
 	}
 	switch status {
 	case "succeeded", "success", "completed", "failed", "failure":
-		return "" // terminal state, handle original body as-is
+		return nil // terminal state, handle original body as-is
 	}
-	if env.PollPath != "" {
-		return env.PollPath
+
+	var targets []string
+	pollPath := env.PollPath
+	if pollPath == "" {
+		pollPath = env.Metadata.PollPath
 	}
-	return env.Metadata.PollPath
+	if pollPath != "" && channelBaseURL != "" {
+		targets = append(targets, strings.TrimSuffix(channelBaseURL, "/")+pollPath)
+	}
+	pollURL := env.PollURL
+	if pollURL == "" {
+		pollURL = env.Metadata.PollURL
+	}
+	if pollURL != "" {
+		targets = append(targets, pollURL)
+	}
+	return targets
 }
 
 // pollOpenaiImageTask polls the upstream task until a terminal state and
 // returns the final body, keeping the client-facing call synchronous.
-// Bounded by RELAY_TIMEOUT (default 5 minutes when unset).
-func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, pollPath string) ([]byte, *types.NewAPIError) {
+// targets are tried in order: when one keeps returning 404 (route not
+// exposed on that host), the next candidate (e.g. upstream poll_url) is
+// used. Bounded by RELAY_TIMEOUT (default 5 minutes when unset).
+func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, targets []string) ([]byte, *types.NewAPIError) {
 	deadline := 5 * time.Minute
 	if common.RelayTimeout > 0 {
 		deadline = time.Duration(common.RelayTimeout) * time.Second
 	}
-	pollURL := strings.TrimSuffix(info.ChannelBaseUrl, "/") + pollPath
 
 	client := service.GetHttpClient()
 	start := time.Now()
 	interval := 2 * time.Second
+	targetIdx := 0
 
 	for {
 		if time.Since(start) > deadline {
@@ -364,6 +382,7 @@ func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, pollPath s
 		case <-time.After(interval):
 		}
 
+		pollURL := targets[targetIdx]
 		req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, pollURL, nil)
 		if err != nil {
 			return nil, types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError)
@@ -372,12 +391,24 @@ func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, pollPath s
 
 		resp, err := client.Do(req)
 		if err != nil {
+			// network error on this target: fail over if another candidate exists
+			if targetIdx+1 < len(targets) {
+				logger.LogWarn(c, fmt.Sprintf("image task poll %s error: %s, failing over", pollURL, err.Error()))
+				targetIdx++
+				continue
+			}
 			return nil, types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusBadGateway)
 		}
 		body, err := io.ReadAll(resp.Body)
 		service.CloseResponseBodyGracefully(resp)
 		if err != nil {
 			return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
+		}
+		if resp.StatusCode == http.StatusNotFound && targetIdx+1 < len(targets) {
+			// poll route not exposed on this host, try the next candidate
+			logger.LogWarn(c, fmt.Sprintf("image task poll %s returned 404, failing over", pollURL))
+			targetIdx++
+			continue
 		}
 		if resp.StatusCode != http.StatusOK {
 			return nil, types.WithOpenAIError(types.OpenAIError{
@@ -411,6 +442,6 @@ func pollOpenaiImageTask(c *gin.Context, info *relaycommon.RelayInfo, pollPath s
 		if len(env.Data) > 2 { // longer than "[]"
 			return body, nil
 		}
-		logger.LogDebug(c, fmt.Sprintf("image task %s still %s, polling again", pollPath, status))
+		logger.LogDebug(c, fmt.Sprintf("image task poll %s still %s, polling again", pollURL, status))
 	}
 }
