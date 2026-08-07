@@ -9,28 +9,12 @@ License, or (at your option) any later version.
 
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import axios from 'axios';
 import {
-  Button,
-  Card,
-  Empty,
-  Input,
-  Select,
-  Spin,
-  TextArea,
-  Typography,
-  Upload,
-  Tag,
-  Tooltip,
+  Button, Card, Empty, Input, Select, Spin, TextArea, Typography, Upload, Tag, Tooltip,
 } from '@douyinfe/semi-ui';
-import { ImageIcon, X, Download, Clock } from 'lucide-react';
+import { ImageIcon, Download, Clock } from 'lucide-react';
 import { UserContext } from '../../context/User';
-import {
-  API,
-  showError,
-  showSuccess,
-  processGroupsData,
-} from '../../helpers';
+import { API, showError, showSuccess, processGroupsData } from '../../helpers';
 
 const { Text, Title } = Typography;
 
@@ -38,34 +22,34 @@ const TOKEN_STORAGE_KEY = 'imagestudio_token';
 const HISTORY_STORAGE_KEY = 'imagestudio_history';
 const MAX_HISTORY = 50;
 const MAX_REF_IMAGES = 6;
+const POLL_INTERVAL_MS = 3000;
+const TERMINAL_STATUSES = ['SUCCESS', 'FAILURE'];
 
 const SIZE_OPTIONS = [
   { label: '16:9', value: '16:9' },
   { label: '9:16', value: '9:16' },
-  { label: '1:1', value: '1:1' },
-  { label: '4:3', value: '4:3' },
-  { label: '3:4', value: '3:4' },
+  { label: '1:1',  value: '1:1'  },
+  { label: '4:3',  value: '4:3'  },
+  { label: '3:4',  value: '3:4'  },
 ];
 
 const RESOLUTION_OPTIONS = [
-  { label: '1K（标准）', value: '1K' },
-  { label: '2K', value: '2K' },
-  { label: '4K', value: '4K' },
+  { label: '标准 (1K)', value: '1K' },
+  { label: '2K',        value: '2K' },
+  { label: '4K',        value: '4K' },
 ];
 
 const COUNT_OPTIONS = [1, 2, 3, 4].map((n) => ({ label: String(n), value: n }));
 
 const IMAGE_MODEL_KEYWORDS = [
-  'image', 'gpt-image', 'dall-e', 'flux', 'stable', 'sdxl', 'midjourney',
-  'imagine', 'draw', 'paint', 'art', 'vision',
+  'image', 'gpt-image', 'dall-e', 'flux', 'stable', 'sdxl',
+  'midjourney', 'imagine', 'draw', 'paint', 'art',
 ];
-
 const isImageModel = (id) => {
   const lower = id.toLowerCase();
   return IMAGE_MODEL_KEYWORDS.some((kw) => lower.includes(kw));
 };
 
-// 将文件转换为 Base64 Data URL
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -75,17 +59,12 @@ const fileToBase64 = (file) =>
   });
 
 const loadHistory = () => {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]'); }
+  catch { return []; }
 };
-
 const saveHistory = (history) => {
-  try {
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
-  } catch {}
+  try { localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history.slice(0, MAX_HISTORY))); }
+  catch {}
 };
 
 const ImageStudio = () => {
@@ -101,12 +80,13 @@ const ImageStudio = () => {
   const [size, setSize] = useState('16:9');
   const [resolution, setResolution] = useState('1K');
   const [count, setCount] = useState(1);
-  const [refImages, setRefImages] = useState([]); // [{dataUrl, name}]
+  const [refImages, setRefImages] = useState([]);
+
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null); // {images: [{url, revised_prompt}], prompt, model, ts}
+  const [task, setTask] = useState(null);
   const [history, setHistory] = useState(() => loadHistory());
   const [showHistory, setShowHistory] = useState(false);
-  const uploadRef = useRef(null);
+  const pollTimerRef = useRef(null);
 
   const authHeaders = useCallback(() => {
     let key = token.trim();
@@ -121,12 +101,7 @@ const ImageStudio = () => {
   const loadModels = useCallback(async () => {
     if (!token.trim()) { showError(t('请先填写令牌')); return; }
     try {
-      let key = token.trim();
-      if (!key.startsWith('sk-')) key = `sk-${key}`;
-      const baseURL = window.location.origin;
-      const res = await axios.get(`${baseURL}/v1/models`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
+      const res = await API.get('/v1/models', { headers: authHeaders(), skipErrorHandler: true });
       const list = res?.data?.data;
       if (!Array.isArray(list)) { showError(t('加载模型失败')); return; }
       const ids = list.map((item) => item?.id).filter(Boolean);
@@ -140,7 +115,7 @@ const ImageStudio = () => {
     } catch (e) {
       showError(e?.response?.data?.error?.message || t('加载模型失败，请检查令牌'));
     }
-  }, [token, t]);
+  }, [token, authHeaders, t]);
 
   const loadGroups = useCallback(async () => {
     try {
@@ -158,8 +133,43 @@ const ImageStudio = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopPolling, [stopPolling]);
+
+  const startPolling = useCallback((taskId, pendingEntry) => {
+    stopPolling();
+    pollTimerRef.current = setInterval(async () => {
+      try {
+        const res = await API.get(`/v1/image/generations/${taskId}`, {
+          headers: authHeaders(),
+          skipErrorHandler: true,
+        });
+        const data = res?.data?.data;
+        if (!data) return;
+        setTask((prev) => ({ ...prev, ...data }));
+        if (TERMINAL_STATUSES.includes(data.status)) {
+          stopPolling();
+          if (data.status === 'SUCCESS') {
+            showSuccess(t('图片生成完成'));
+            const entry = { ...pendingEntry, result_url: data.result_url || data.url };
+            const newHistory = [entry, ...history];
+            setHistory(newHistory);
+            saveHistory(newHistory);
+          } else {
+            showError(data.fail_reason || t('图片生成失败'));
+          }
+        }
+      } catch {}
+    }, POLL_INTERVAL_MS);
+  }, [authHeaders, stopPolling, t, history]);
+
   const handleRefImageChange = useCallback(async ({ fileList }) => {
-    // fileList 是 Semi Upload 维护的全量列表，每项有 fileInstance（原生 File）
     const results = [];
     for (const item of fileList) {
       const rawFile = item.fileInstance;
@@ -168,18 +178,10 @@ const ImageStudio = () => {
       try {
         const dataUrl = await fileToBase64(rawFile);
         results.push({ dataUrl, name: rawFile.name || 'image' });
-      } catch {
-        showError(t('图片读取失败：') + (rawFile.name || ''));
-      }
+      } catch { showError(t('图片读取失败：') + (rawFile.name || '')); }
     }
     setRefImages(results);
   }, [t]);
-
-  const handleRefImageRemove = (idx) => {
-    setRefImages((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const [pollStatus, setPollStatus] = useState('');
 
   const handleSubmit = async () => {
     if (!token.trim()) { showError(t('请先填写令牌')); return; }
@@ -187,14 +189,9 @@ const ImageStudio = () => {
     if (!prompt.trim()) { showError(t('请输入图片描述')); return; }
 
     setSubmitting(true);
-    setPollStatus(t('提交任务中...'));
-    setResult(null);
+    stopPolling();
+    setTask(null);
     try {
-      let key = token.trim();
-      if (!key.startsWith('sk-')) key = `sk-${key}`;
-      const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
-      const baseURL = window.location.origin;
-
       const payload = {
         model: model.trim(),
         prompt: prompt.trim(),
@@ -202,69 +199,38 @@ const ImageStudio = () => {
         n: count,
       };
       if (group) payload.group = group;
-      if (refImages.length > 0) {
-        payload.image = refImages.map((r) => r.dataUrl);
+      if (refImages.length > 0) payload.image = refImages.map((r) => r.dataUrl);
+
+      const res = await API.post('/v1/image/generations', payload, {
+        headers: authHeaders(),
+        skipErrorHandler: true,
+      });
+      const data = res?.data;
+      const taskId = data?.task_id || data?.id;
+      if (!taskId) {
+        showError(data?.message || t('提交失败，未返回任务 ID'));
+        return;
       }
-
-      // 第一步：提交任务
-      const res = await axios.post(`${baseURL}/v1/images/generations`, payload, { headers });
-      const init = res?.data;
-      if (init?.error) { showError(init.error?.message || t('提交失败')); return; }
-
-      // 判断是否异步任务
-      const pollPath = init?.poll_path || init?.metadata?.poll_path;
-      let images = init?.data || [];
-
-      if (images.length === 0 && pollPath) {
-        // 第二步：轮询直到完成
-        const POLL_INTERVAL = 3000;
-        const MAX_POLLS = 60; // 最多等 3 分钟
-        for (let i = 0; i < MAX_POLLS; i++) {
-          await new Promise((r) => setTimeout(r, POLL_INTERVAL));
-          setPollStatus(t('生成中，请稍候...') + ` (${(i + 1) * 3}s)`);
-          try {
-            const poll = await axios.get(`${baseURL}${pollPath}`, { headers });
-            const pd = poll?.data;
-            const status = pd?.status || pd?.metadata?.status;
-            if (status === 'succeeded' || status === 'completed') {
-              images = pd?.data || [];
-              break;
-            } else if (status === 'failed' || status === 'error') {
-              showError(pd?.error?.message || t('任务失败'));
-              return;
-            }
-            // processing / pending 继续等待
-          } catch (pollErr) {
-            // 网络抖动，继续轮询
-          }
-        }
-      }
-
-      if (!images.length) { showError(t('生成超时或未返回图片')); return; }
-
-      const entry = {
-        id: Date.now(),
+      const pendingEntry = {
+        id: taskId,
         ts: new Date().toLocaleString(),
         prompt: prompt.trim(),
         model: model.trim(),
         size,
         resolution,
-        images,
+        result_url: null,
       };
-      setResult(entry);
-      const newHistory = [entry, ...history];
-      setHistory(newHistory);
-      saveHistory(newHistory);
-      showSuccess(t('图片生成完成'));
+      setTask({ task_id: taskId, status: data?.status || 'SUBMITTED' });
+      showSuccess(t('任务已提交，正在生成'));
+      startPolling(taskId, pendingEntry);
     } catch (e) {
       showError(
-        e?.response?.data?.error?.message ||
         e?.response?.data?.message ||
-        t('生成失败'),
+        e?.response?.data?.error?.message ||
+        t('提交失败'),
       );
     } finally {
       setSubmitting(false);
-      setPollStatus('');
     }
   };
 
@@ -278,18 +244,24 @@ const ImageStudio = () => {
     a.click();
   };
 
+  const isRunning = task && !TERMINAL_STATUSES.includes(task.status);
+  const resultUrl = task?.result_url || task?.url || '';
+
+
   return (
     <div className='mt-[60px] px-2 pb-6'>
       <div className='mx-auto max-w-3xl flex flex-col gap-4 pt-4'>
+
+        {/* 生成表单 */}
         <Card>
           <div className='flex items-center gap-2 mb-2'>
             <ImageIcon size={20} />
             <Title heading={4} className='!mb-0'>{t('0帧生图')}</Title>
           </div>
-          <Text type='tertiary'>
-            {t('输入令牌，选择模型，描述画面，可上传最多 4 张参考图，费用从该令牌扣除。')}
-          </Text>
+          <Text type='tertiary'>{t('输入令牌，选择模型，描述画面，可上传最多 6 张参考图，费用从该令牌扣除。')}</Text>
+
           <div className='mt-4 flex flex-col gap-4'>
+            {/* 令牌 */}
             <div>
               <Text strong>{t('令牌')}</Text>
               <div className='mt-1 flex gap-2'>
@@ -297,6 +269,8 @@ const ImageStudio = () => {
                 <Button onClick={loadModels}>{t('加载模型')}</Button>
               </div>
             </div>
+
+            {/* 模型 + 分组 */}
             <div className='flex flex-col sm:flex-row gap-4'>
               <div className='flex-1'>
                 <Text strong>{t('图片模型')}</Text>
@@ -307,10 +281,12 @@ const ImageStudio = () => {
                 <Select value={group} onChange={setGroup} optionList={groups} filter showClear placeholder={t('默认使用令牌分组')} className='mt-1 w-full' />
               </div>
             </div>
+
+            {/* 比例 + 分辨率 + 数量 */}
             <div className='flex flex-col sm:flex-row gap-4'>
               <div className='flex-1'>
                 <Text strong>{t('画面比例')}</Text>
-                <Select value={size} onChange={setSize} optionList={SIZE_OPTIONS} filter allowCreate placeholder={t('选择比例')} className='mt-1 w-full' />
+                <Select value={size} onChange={setSize} optionList={SIZE_OPTIONS} filter allowCreate className='mt-1 w-full' />
               </div>
               <div className='flex-1'>
                 <Text strong>{t('分辨率')}</Text>
@@ -321,10 +297,14 @@ const ImageStudio = () => {
                 <Select value={count} onChange={setCount} optionList={COUNT_OPTIONS} className='mt-1 w-full' />
               </div>
             </div>
+
+            {/* 提示词 */}
             <div>
               <Text strong>{t('画面描述')}</Text>
-              <TextArea value={prompt} onChange={setPrompt} rows={4} maxCount={2000} placeholder={t('描述你想生成的画面，例如：一只猫在雪地里奔跑')} className='mt-1' />
+              <TextArea value={prompt} onChange={setPrompt} rows={4} maxCount={2000} placeholder={t('描述你想生成的画面')} className='mt-1' />
             </div>
+
+            {/* 参考图 */}
             <div>
               <Text strong>{t('参考图（最多 6 张，可选）')}</Text>
               <Upload
@@ -337,57 +317,51 @@ const ImageStudio = () => {
                 listType='picture'
                 className='mt-1'
               >
-                <Button icon={<span>+</span>}>{t('添加参考图')}</Button>
+                <Button>{t('+ 添加参考图')}</Button>
               </Upload>
             </div>
-            <Button theme='solid' size='large' loading={submitting} onClick={handleSubmit}>
-              {submitting ? t('生成中...') : t('开始生成')}
+
+            <Button theme='solid' size='large' loading={submitting || isRunning} onClick={handleSubmit} disabled={isRunning}>
+              {isRunning ? t('生成中...') : submitting ? t('提交中...') : t('开始生成')}
             </Button>
           </div>
         </Card>
 
         {/* 当次结果 */}
         <Card title={t('生成结果')}>
-          {submitting && (
+          {!task && <Empty description={t('还没有生成任务')} />}
+          {task && !TERMINAL_STATUSES.includes(task.status) && (
             <div className='flex items-center gap-2 py-4'>
               <Spin />
-              <Text type='tertiary'>{pollStatus || t('提交中...')}</Text>
+              <Text type='tertiary'>{t('正在生成，请稍候...')} ({task.status})</Text>
             </div>
           )}
-          {!submitting && !result && <Empty description={t('还没有生成任务')} />}
-          {!submitting && result && (
+          {task && task.status === 'SUCCESS' && (
             <div className='flex flex-col gap-3'>
               <div className='flex flex-wrap gap-2 items-center'>
-                <Tag>{result.model}</Tag>
-                <Tag>{result.size}</Tag>
-                <Tag>{result.resolution}</Tag>
-                <Text type='tertiary' size='small'>{result.ts}</Text>
+                <Tag>{task.model || model}</Tag>
+                <Tag>{size}</Tag>
+                <Tag>{resolution}</Tag>
               </div>
-              <Text type='tertiary' ellipsis={{ rows: 2 }}>{result.prompt}</Text>
-              <div className='flex flex-wrap gap-3'>
-                {result.images.map((img, idx) => {
-                  const src = img.b64_json ? `data:image/png;base64,${img.b64_json}` : img.url;
-                  return (
-                    <div key={idx} className='relative group'>
-                      <img src={src} alt={`result-${idx}`} className='rounded-lg max-h-80 object-contain border border-gray-100' />
-                      <div className='absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity'>
-                        <Tooltip content={t('下载')}>
-                          <button
-                            className='bg-black bg-opacity-50 rounded-full p-1.5 text-white hover:bg-opacity-80'
-                            onClick={() => handleDownload(src, idx)}
-                          >
-                            <Download size={14} />
-                          </button>
-                        </Tooltip>
-                      </div>
-                      {img.revised_prompt && (
-                        <Text type='tertiary' size='small' className='mt-1 block max-w-xs'>{img.revised_prompt}</Text>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              {resultUrl && (
+                <div className='relative group inline-block'>
+                  <img src={resultUrl} alt='result' className='rounded-lg max-h-[500px] object-contain border border-gray-100' />
+                  <div className='absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity'>
+                    <Tooltip content={t('下载')}>
+                      <button
+                        className='bg-black bg-opacity-50 rounded-full p-1.5 text-white hover:bg-opacity-80'
+                        onClick={() => handleDownload(resultUrl, 0)}
+                      >
+                        <Download size={14} />
+                      </button>
+                    </Tooltip>
+                  </div>
+                </div>
+              )}
             </div>
+          )}
+          {task && task.status === 'FAILURE' && (
+            <Text type='danger'>{t('生成失败：')}{task.fail_reason || t('未知错误')}</Text>
           )}
         </Card>
 
@@ -423,29 +397,24 @@ const ImageStudio = () => {
                     <Text type='tertiary' size='small'>{entry.ts}</Text>
                   </div>
                   <Text type='tertiary' size='small' ellipsis={{ rows: 1 }} className='mb-2'>{entry.prompt}</Text>
-                  <div className='flex flex-wrap gap-2'>
-                    {entry.images.map((img, idx) => {
-                      const src = img.b64_json ? `data:image/png;base64,${img.b64_json}` : img.url;
-                      return (
-                        <div key={idx} className='relative group'>
-                          <img
-                            src={src}
-                            alt={`hist-${entry.id}-${idx}`}
-                            className='rounded-lg h-24 w-24 object-cover border border-gray-100 cursor-pointer'
-                            onClick={() => window.open(src, '_blank')}
-                          />
-                          <div className='absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity'>
-                            <button
-                              className='bg-black bg-opacity-50 rounded-full p-1 text-white hover:bg-opacity-80'
-                              onClick={(e) => { e.stopPropagation(); handleDownload(src, idx); }}
-                            >
-                              <Download size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {entry.result_url && (
+                    <div className='relative group inline-block'>
+                      <img
+                        src={entry.result_url}
+                        alt={entry.id}
+                        className='rounded-lg h-28 w-28 object-cover border border-gray-100 cursor-pointer'
+                        onClick={() => window.open(entry.result_url, '_blank')}
+                      />
+                      <div className='absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity'>
+                        <button
+                          className='bg-black bg-opacity-50 rounded-full p-1 text-white hover:bg-opacity-80'
+                          onClick={(e) => { e.stopPropagation(); handleDownload(entry.result_url, 0); }}
+                        >
+                          <Download size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

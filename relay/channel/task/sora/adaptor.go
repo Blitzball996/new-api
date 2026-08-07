@@ -40,7 +40,7 @@ type ImageURL struct {
 
 type responseTask struct {
 	ID                 string `json:"id"`
-	TaskID             string `json:"task_id,omitempty"` //兼容旧接口
+	TaskID             string `json:"task_id,omitempty"`
 	Object             string `json:"object"`
 	Model              string `json:"model"`
 	Status             string `json:"status"`
@@ -51,7 +51,13 @@ type responseTask struct {
 	Seconds            string `json:"seconds,omitempty"`
 	Size               string `json:"size,omitempty"`
 	RemixedFromVideoID string `json:"remixed_from_video_id,omitempty"`
-	Error              *struct {
+	// 图片生成任务结果
+	Data []struct {
+		URL           string `json:"url,omitempty"`
+		B64JSON       string `json:"b64_json,omitempty"`
+		RevisedPrompt string `json:"revised_prompt,omitempty"`
+	} `json:"data,omitempty"`
+	Error *struct {
 		Message string `json:"message"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
@@ -66,7 +72,8 @@ type TaskAdaptor struct {
 	ChannelType int
 	apiKey      string
 	baseURL     string
-	newAPIVideo bool // 渠道开启「New API 兼容视频接口」：使用 /v1/video/generations 直通上游
+	newAPIVideo    bool // 渠道开启「New API 兼容视频接口」：使用 /v1/video/generations 直通上游
+	newAPIImageGen bool // 渠道开启「New API 兼容图片接口」：使用 /v1/image/generations 任务模式
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -74,6 +81,7 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	a.baseURL = info.ChannelBaseUrl
 	a.apiKey = info.ApiKey
 	a.newAPIVideo = info.ChannelOtherSettings.OpenAIVideoNewAPIRelay
+	a.newAPIImageGen = info.ChannelOtherSettings.OpenAIImageNewAPIRelay
 }
 
 func validateRemixRequest(c *gin.Context) *dto.TaskError {
@@ -135,8 +143,11 @@ func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, erro
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
 	}
+	if a.newAPIImageGen {
+		// 图片生成任务模式：提交到上游 /v1/images/generations
+		return fmt.Sprintf("%s/v1/images/generations", a.baseURL), nil
+	}
 	if a.newAPIVideo {
-		// New API 兼容上游：保持 /v1/video/generations 路径直通，不改写为 OpenAI /v1/videos 格式
 		return fmt.Sprintf("%s/v1/video/generations", a.baseURL), nil
 	}
 	return fmt.Sprintf("%s/v1/videos", a.baseURL), nil
@@ -271,10 +282,13 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 		return nil, fmt.Errorf("invalid task_id")
 	}
 
-	uri := fmt.Sprintf("%s/v1/videos/%s", baseUrl, taskID)
-	if a.newAPIVideo {
-		// New API 兼容上游：查询接口为 /v1/video/generations/{task_id}
+	var uri string
+	if a.newAPIImageGen {
+		uri = fmt.Sprintf("%s/v1/images/generations/%s", baseUrl, taskID)
+	} else if a.newAPIVideo {
 		uri = fmt.Sprintf("%s/v1/video/generations/%s", baseUrl, taskID)
+	} else {
+		uri = fmt.Sprintf("%s/v1/videos/%s", baseUrl, taskID)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, uri, nil)
@@ -314,9 +328,17 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusQueued
 	case "processing", "in_progress":
 		taskResult.Status = model.TaskStatusInProgress
-	case "completed":
+	case "completed", "succeeded":
 		taskResult.Status = model.TaskStatusSuccess
-		// Url intentionally left empty — the caller constructs the proxy URL using the public task ID
+		// 图片任务：从 data[].url 提取第一张图 URL 存入 ResultURL
+		if len(resTask.Data) > 0 {
+			if resTask.Data[0].URL != "" {
+				taskResult.Url = resTask.Data[0].URL
+			} else if resTask.Data[0].B64JSON != "" {
+				taskResult.Url = "data:image/png;base64," + resTask.Data[0].B64JSON
+			}
+		}
+		// 视频任务：URL 由 caller 通过 proxy URL 构造
 	case "failed", "cancelled":
 		taskResult.Status = model.TaskStatusFailure
 		if resTask.Error != nil {

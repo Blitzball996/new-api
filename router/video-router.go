@@ -23,6 +23,9 @@ func SetVideoRouter(router *gin.Engine) {
 		videoV1Router.POST("/video/generations", controller.RelayTask)
 		videoV1Router.GET("/video/generations/:task_id", controller.RelayTaskFetch)
 		videoV1Router.POST("/videos/:video_id/remix", controller.RelayTask)
+		// 图片生成任务路由（异步任务模式，前端轮询）
+		videoV1Router.POST("/image/generations", controller.RelayTask)
+		videoV1Router.GET("/image/generations/:task_id", controller.RelayTaskFetch)
 	}
 	// openai compatible API video routes
 	// docs: https://platform.openai.com/docs/api-reference/videos/create

@@ -43,6 +43,9 @@ const (
 	RelayModeVideoFetchByID
 	RelayModeVideoSubmit
 
+	RelayModeImageGenFetchByID
+	RelayModeImageGenSubmit
+
 	RelayModeRerank
 
 	RelayModeResponses
