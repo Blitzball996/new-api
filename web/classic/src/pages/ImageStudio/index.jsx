@@ -179,22 +179,25 @@ const ImageStudio = () => {
     setRefImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const [pollStatus, setPollStatus] = useState('');
+
   const handleSubmit = async () => {
     if (!token.trim()) { showError(t('请先填写令牌')); return; }
     if (!model?.trim()) { showError(t('请选择或输入图片模型')); return; }
     if (!prompt.trim()) { showError(t('请输入图片描述')); return; }
 
     setSubmitting(true);
+    setPollStatus(t('提交任务中...'));
     setResult(null);
     try {
       let key = token.trim();
       if (!key.startsWith('sk-')) key = `sk-${key}`;
+      const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+      const baseURL = window.location.origin;
 
-      // prompt 末尾附加比例描述，size 字段传分辨率（1K/2K/4K）
-      const fullPrompt = `${prompt.trim()}，${size}`;
       const payload = {
         model: model.trim(),
-        prompt: fullPrompt,
+        prompt: prompt.trim(),
         size: resolution,
         n: count,
       };
@@ -203,19 +206,41 @@ const ImageStudio = () => {
         payload.image = refImages.map((r) => r.dataUrl);
       }
 
-      const baseURL = window.location.origin;
-      const res = await axios.post(`${baseURL}/v1/images/generations`, payload, {
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // 第一步：提交任务
+      const res = await axios.post(`${baseURL}/v1/images/generations`, payload, { headers });
+      const init = res?.data;
+      if (init?.error) { showError(init.error?.message || t('提交失败')); return; }
 
-      const data = res?.data;
-      console.log('[ImageStudio] response:', JSON.stringify(data));
-      if (data?.error) { showError(data.error?.message || t('生成失败')); return; }
-      const images = data?.data || [];
-      if (!images.length) { showError(t('未返回图片') + ' raw:' + JSON.stringify(data)); return; }
+      // 判断是否异步任务
+      const pollPath = init?.poll_path || init?.metadata?.poll_path;
+      let images = init?.data || [];
+
+      if (images.length === 0 && pollPath) {
+        // 第二步：轮询直到完成
+        const POLL_INTERVAL = 3000;
+        const MAX_POLLS = 60; // 最多等 3 分钟
+        for (let i = 0; i < MAX_POLLS; i++) {
+          await new Promise((r) => setTimeout(r, POLL_INTERVAL));
+          setPollStatus(t('生成中，请稍候...') + ` (${(i + 1) * 3}s)`);
+          try {
+            const poll = await axios.get(`${baseURL}${pollPath}`, { headers });
+            const pd = poll?.data;
+            const status = pd?.status || pd?.metadata?.status;
+            if (status === 'succeeded' || status === 'completed') {
+              images = pd?.data || [];
+              break;
+            } else if (status === 'failed' || status === 'error') {
+              showError(pd?.error?.message || t('任务失败'));
+              return;
+            }
+            // processing / pending 继续等待
+          } catch (pollErr) {
+            // 网络抖动，继续轮询
+          }
+        }
+      }
+
+      if (!images.length) { showError(t('生成超时或未返回图片')); return; }
 
       const entry = {
         id: Date.now(),
@@ -239,6 +264,7 @@ const ImageStudio = () => {
       );
     } finally {
       setSubmitting(false);
+      setPollStatus('');
     }
   };
 
@@ -325,7 +351,7 @@ const ImageStudio = () => {
           {submitting && (
             <div className='flex items-center gap-2 py-4'>
               <Spin />
-              <Text type='tertiary'>{t('正在生成，请稍候...')}</Text>
+              <Text type='tertiary'>{pollStatus || t('提交中...')}</Text>
             </div>
           )}
           {!submitting && !result && <Empty description={t('还没有生成任务')} />}
