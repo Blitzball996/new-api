@@ -708,6 +708,7 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		Metadata json.RawMessage `json:"metadata,omitempty"`
 		Duration json.RawMessage `json:"duration,omitempty"`
+		Image    json.RawMessage `json:"image,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(t),
@@ -715,6 +716,22 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 
 	if err := common.Unmarshal(data, &aux); err != nil {
 		return err
+	}
+
+	// image 字段兼容字符串和数组两种格式
+	if len(aux.Image) > 0 {
+		var imageStr string
+		if err := common.Unmarshal(aux.Image, &imageStr); err == nil {
+			t.Image = imageStr
+		} else {
+			var imageArr []string
+			if err := common.Unmarshal(aux.Image, &imageArr); err == nil {
+				if len(imageArr) > 0 {
+					t.Image = imageArr[0]
+				}
+				t.Images = imageArr
+			}
+		}
 	}
 
 	if len(aux.Duration) > 0 {

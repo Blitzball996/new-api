@@ -101,6 +101,10 @@ func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycom
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
 	}
+	// 图片生成任务是 JSON 请求，跳过 multipart 校验
+	if a.newAPIImageGen {
+		return nil
+	}
 	return relaycommon.ValidateMultipartDirect(c, info)
 }
 
