@@ -7,7 +7,7 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button, Card, Empty, Input, Select, Spin, TextArea, Typography, Upload, Tag, Tooltip,
@@ -22,9 +22,25 @@ const TOKEN_STORAGE_KEY = 'imagestudio_token';
 const HISTORY_STORAGE_KEY = 'imagestudio_history';
 const MAX_HISTORY = 50;
 const MAX_REF_IMAGES = 6;
-const POLL_INTERVAL_MS = 3000;
-const TERMINAL_STATUSES = ['SUCCESS', 'FAILURE'];
+// 上游 /v1/images/generations 为同步接口，生成期间需要较长等待
+const REQUEST_TIMEOUT_MS = 600000;
 
+// 参考图仅 pro 模型支持
+const supportsRefImage = (id) => id.toLowerCase().includes('pro');
+
+// 从同步响应中提取图片地址，优先 url，其次 b64_json 兜底
+const extractImageUrls = (data) => {
+  const list = Array.isArray(data?.data) ? data.data : [];
+  return list
+    .map((item) => {
+      if (item?.url) return item.url;
+      if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+      return null;
+    })
+    .filter(Boolean);
+};
+
+// 比例通过 prompt 传递，上游 size 只接受 1K/2K/4K
 const SIZE_OPTIONS = [
   { label: '16:9', value: '16:9' },
   { label: '9:16', value: '9:16' },
@@ -83,10 +99,9 @@ const ImageStudio = () => {
   const [refImages, setRefImages] = useState([]);
 
   const [submitting, setSubmitting] = useState(false);
-  const [task, setTask] = useState(null);
+  const [results, setResults] = useState([]);
   const [history, setHistory] = useState(() => loadHistory());
   const [showHistory, setShowHistory] = useState(false);
-  const pollTimerRef = useRef(null);
 
   const authHeaders = useCallback(() => {
     let key = token.trim();
@@ -133,54 +148,18 @@ const ImageStudio = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stopPolling = useCallback(() => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => stopPolling, [stopPolling]);
-
-  const startPolling = useCallback((taskId, pendingEntry) => {
-    stopPolling();
-    pollTimerRef.current = setInterval(async () => {
-      try {
-        const res = await API.get(`/v1/imagetask/generations/${taskId}`, {
-          headers: authHeaders(),
-          skipErrorHandler: true,
-        });
-        const data = res?.data?.data;
-        if (!data) return;
-        setTask((prev) => ({ ...prev, ...data }));
-        if (TERMINAL_STATUSES.includes(data.status)) {
-          stopPolling();
-          if (data.status === 'SUCCESS') {
-            showSuccess(t('图片生成完成'));
-            const entry = { ...pendingEntry, result_url: data.result_url || data.url };
-            const newHistory = [entry, ...history];
-            setHistory(newHistory);
-            saveHistory(newHistory);
-          } else {
-            showError(data.fail_reason || t('图片生成失败'));
-          }
-        }
-      } catch {}
-    }, POLL_INTERVAL_MS);
-  }, [authHeaders, stopPolling, t, history]);
-
   const handleRefImageChange = useCallback(async ({ fileList }) => {
-    const results = [];
+    const picked = [];
     for (const item of fileList) {
       const rawFile = item.fileInstance;
       if (!rawFile) continue;
-      if (results.length >= MAX_REF_IMAGES) break;
+      if (picked.length >= MAX_REF_IMAGES) break;
       try {
         const dataUrl = await fileToBase64(rawFile);
-        results.push({ dataUrl, name: rawFile.name || 'image' });
+        picked.push({ dataUrl, name: rawFile.name || 'image' });
       } catch { showError(t('图片读取失败：') + (rawFile.name || '')); }
     }
-    setRefImages(results);
+    setRefImages(picked);
   }, [t]);
 
   const handleSubmit = async () => {
@@ -188,46 +167,65 @@ const ImageStudio = () => {
     if (!model?.trim()) { showError(t('请选择或输入图片模型')); return; }
     if (!prompt.trim()) { showError(t('请输入图片描述')); return; }
 
+    const usingModel = model.trim();
+    if (refImages.length > 0 && !supportsRefImage(usingModel)) {
+      showError(t('参考图仅 pro 模型支持，请切换到 gpt-image-2-pro'));
+      return;
+    }
+
     setSubmitting(true);
-    stopPolling();
-    setTask(null);
+    setResults([]);
     try {
+      // 比例需要写进 prompt，上游 size 仅接受 1K/2K/4K
+      const basePrompt = prompt.trim();
+      const finalPrompt = size && !basePrompt.includes(size)
+        ? `${basePrompt}，${size}`
+        : basePrompt;
+
       const payload = {
-        model: model.trim(),
-        prompt: prompt.trim(),
+        model: usingModel,
+        prompt: finalPrompt,
         size: resolution,
-        n: count,
       };
+      if (count > 1) payload.n = count;
       if (group) payload.group = group;
       if (refImages.length > 0) payload.image = refImages.map((r) => r.dataUrl);
 
-      const res = await API.post('/v1/imagetask/generations', payload, {
+      const res = await API.post('/v1/images/generations', payload, {
         headers: authHeaders(),
         skipErrorHandler: true,
+        timeout: REQUEST_TIMEOUT_MS,
       });
       const data = res?.data;
-      const taskId = data?.task_id || data?.id;
-      if (!taskId) {
-        showError(data?.message || t('提交失败，未返回任务 ID'));
+      const urls = extractImageUrls(data);
+      if (!urls.length) {
+        showError(
+          data?.error?.message || data?.message || t('生成失败，响应中没有图片地址'),
+        );
         return;
       }
-      const pendingEntry = {
-        id: taskId,
+
+      setResults(urls);
+      showSuccess(t('图片生成完成'));
+      const entry = {
+        id: `${data?.created || Date.now()}`,
         ts: new Date().toLocaleString(),
-        prompt: prompt.trim(),
-        model: model.trim(),
+        prompt: basePrompt,
+        model: usingModel,
         size,
         resolution,
-        result_url: null,
+        result_url: urls[0],
+        result_urls: urls,
       };
-      setTask({ task_id: taskId, status: data?.status || 'SUBMITTED' });
-      showSuccess(t('任务已提交，正在生成'));
-      startPolling(taskId, pendingEntry);
+      const newHistory = [entry, ...history];
+      setHistory(newHistory);
+      saveHistory(newHistory);
     } catch (e) {
       showError(
-        e?.response?.data?.message ||
         e?.response?.data?.error?.message ||
-        t('提交失败'),
+        e?.response?.data?.message ||
+        e?.message ||
+        t('生成失败'),
       );
     } finally {
       setSubmitting(false);
@@ -244,8 +242,8 @@ const ImageStudio = () => {
     a.click();
   };
 
-  const isRunning = task && !TERMINAL_STATUSES.includes(task.status);
-  const resultUrl = task?.result_url || task?.url || '';
+  const isRunning = submitting;
+  const refImageDisabled = !supportsRefImage(model || '');
 
 
   return (
@@ -301,12 +299,17 @@ const ImageStudio = () => {
             {/* 提示词 */}
             <div>
               <Text strong>{t('画面描述')}</Text>
-              <TextArea value={prompt} onChange={setPrompt} rows={4} maxCount={2000} placeholder={t('描述你想生成的画面')} className='mt-1' />
+              <TextArea value={prompt} onChange={setPrompt} rows={4} autosize={{ minRows: 4, maxRows: 20 }} placeholder={t('描述你想生成的画面')} className='mt-1' />
             </div>
 
             {/* 参考图 */}
             <div>
               <Text strong>{t('参考图（最多 6 张，可选）')}</Text>
+              {refImageDisabled && (
+                <div className='mt-1'>
+                  <Text type='warning'>{t('当前模型不支持参考图，请选择 gpt-image-2-pro')}</Text>
+                </div>
+              )}
               <Upload
                 accept='image/*'
                 multiple
@@ -315,53 +318,55 @@ const ImageStudio = () => {
                 beforeUpload={() => false}
                 onChange={handleRefImageChange}
                 listType='picture'
+                disabled={refImageDisabled}
                 className='mt-1'
               >
-                <Button>{t('+ 添加参考图')}</Button>
+                <Button disabled={refImageDisabled}>{t('+ 添加参考图')}</Button>
               </Upload>
             </div>
 
-            <Button theme='solid' size='large' loading={submitting || isRunning} onClick={handleSubmit} disabled={isRunning}>
-              {isRunning ? t('生成中...') : submitting ? t('提交中...') : t('开始生成')}
+            <Button theme='solid' size='large' loading={isRunning} onClick={handleSubmit} disabled={isRunning}>
+              {isRunning ? t('生成中...') : t('开始生成')}
             </Button>
           </div>
         </Card>
 
         {/* 当次结果 */}
         <Card title={t('生成结果')}>
-          {!task && <Empty description={t('还没有生成任务')} />}
-          {task && !TERMINAL_STATUSES.includes(task.status) && (
+          {submitting && (
             <div className='flex items-center gap-2 py-4'>
               <Spin />
-              <Text type='tertiary'>{t('正在生成，请稍候...')} ({task.status})</Text>
+              <Text type='tertiary'>{t('正在生成，请稍候（同步接口，可能需要数十秒）...')}</Text>
             </div>
           )}
-          {task && task.status === 'SUCCESS' && (
+          {!submitting && results.length === 0 && (
+            <Empty description={t('还没有生成结果')} />
+          )}
+          {!submitting && results.length > 0 && (
             <div className='flex flex-col gap-3'>
               <div className='flex flex-wrap gap-2 items-center'>
-                <Tag>{task.model || model}</Tag>
+                <Tag>{model}</Tag>
                 <Tag>{size}</Tag>
                 <Tag>{resolution}</Tag>
               </div>
-              {resultUrl && (
-                <div className='relative group inline-block'>
-                  <img src={resultUrl} alt='result' className='rounded-lg max-h-[500px] object-contain border border-gray-100' />
-                  <div className='absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity'>
-                    <Tooltip content={t('下载')}>
-                      <button
-                        className='bg-black bg-opacity-50 rounded-full p-1.5 text-white hover:bg-opacity-80'
-                        onClick={() => handleDownload(resultUrl, 0)}
-                      >
-                        <Download size={14} />
-                      </button>
-                    </Tooltip>
+              <div className='flex flex-wrap gap-3'>
+                {results.map((url, idx) => (
+                  <div key={idx} className='relative group inline-block'>
+                    <img src={url} alt={`result-${idx}`} className='rounded-lg max-h-[500px] object-contain border border-gray-100' />
+                    <div className='absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity'>
+                      <Tooltip content={t('下载')}>
+                        <button
+                          className='bg-black bg-opacity-50 rounded-full p-1.5 text-white hover:bg-opacity-80'
+                          onClick={() => handleDownload(url, idx)}
+                        >
+                          <Download size={14} />
+                        </button>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
-          )}
-          {task && task.status === 'FAILURE' && (
-            <Text type='danger'>{t('生成失败：')}{task.fail_reason || t('未知错误')}</Text>
           )}
         </Card>
 

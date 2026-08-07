@@ -72,8 +72,7 @@ type TaskAdaptor struct {
 	ChannelType int
 	apiKey      string
 	baseURL     string
-	newAPIVideo    bool // 渠道开启「New API 兼容视频接口」：使用 /v1/video/generations 直通上游
-	newAPIImageGen bool // 渠道开启「New API 兼容图片接口」：使用 /v1/image/generations 任务模式
+	newAPIVideo bool // 渠道开启「New API 兼容视频接口」：使用 /v1/video/generations 直通上游
 }
 
 func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
@@ -81,7 +80,6 @@ func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
 	a.baseURL = info.ChannelBaseUrl
 	a.apiKey = info.ApiKey
 	a.newAPIVideo = info.ChannelOtherSettings.OpenAIVideoNewAPIRelay
-	a.newAPIImageGen = info.ChannelOtherSettings.OpenAIImageNewAPIRelay
 }
 
 func validateRemixRequest(c *gin.Context) *dto.TaskError {
@@ -100,10 +98,6 @@ func validateRemixRequest(c *gin.Context) *dto.TaskError {
 func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
 	if info.Action == constant.TaskActionRemix {
 		return validateRemixRequest(c)
-	}
-	// 图片生成任务是 JSON 请求，跳过 multipart 校验
-	if a.newAPIImageGen {
-		return nil
 	}
 	return relaycommon.ValidateMultipartDirect(c, info)
 }
@@ -146,10 +140,6 @@ func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInf
 func (a *TaskAdaptor) BuildRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if info.Action == constant.TaskActionRemix {
 		return fmt.Sprintf("%s/v1/videos/%s/remix", a.baseURL, info.OriginTaskID), nil
-	}
-	if a.newAPIImageGen {
-		// 图片生成任务模式：提交到上游 /v1/images/generations
-		return fmt.Sprintf("%s/v1/images/generations", a.baseURL), nil
 	}
 	if a.newAPIVideo {
 		return fmt.Sprintf("%s/v1/video/generations", a.baseURL), nil
@@ -287,9 +277,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	}
 
 	var uri string
-	if a.newAPIImageGen {
-		uri = fmt.Sprintf("%s/v1/images/generations/%s", baseUrl, taskID)
-	} else if a.newAPIVideo {
+	if a.newAPIVideo {
 		uri = fmt.Sprintf("%s/v1/video/generations/%s", baseUrl, taskID)
 	} else {
 		uri = fmt.Sprintf("%s/v1/videos/%s", baseUrl, taskID)

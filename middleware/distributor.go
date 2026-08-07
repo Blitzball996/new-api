@@ -83,9 +83,10 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// check path is /pg/chat/completions or video generations submit
+				// check path is /pg/chat/completions or video / image generations submit
 				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") ||
-					(c.Request.Method == http.MethodPost && strings.Contains(c.Request.URL.Path, "/v1/video/generations")) {
+					(c.Request.Method == http.MethodPost && strings.Contains(c.Request.URL.Path, "/v1/video/generations")) ||
+					(c.Request.Method == http.MethodPost && strings.HasPrefix(c.Request.URL.Path, "/v1/images/generations")) {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
 					if err != nil {
@@ -330,23 +331,6 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			relayMode = relayconstant.RelayModeVideoSubmit
 		} else if c.Request.Method == http.MethodGet {
 			relayMode = relayconstant.RelayModeVideoFetchByID
-			shouldSelectChannel = false
-			modelRequest.Model = getTaskOriginModelName(c)
-		}
-		if _, ok := c.Get("relay_mode"); !ok {
-			c.Set("relay_mode", relayMode)
-		}
-	} else if strings.Contains(c.Request.URL.Path, "/v1/imagetask/generations") {
-		relayMode := relayconstant.RelayModeUnknown
-		if c.Request.Method == http.MethodPost {
-			req, err := getModelFromRequest(c)
-			if err != nil {
-				return nil, false, err
-			}
-			modelRequest.Model = req.Model
-			relayMode = relayconstant.RelayModeImageGenSubmit
-		} else if c.Request.Method == http.MethodGet {
-			relayMode = relayconstant.RelayModeImageGenFetchByID
 			shouldSelectChannel = false
 			modelRequest.Model = getTaskOriginModelName(c)
 		}
