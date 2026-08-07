@@ -102,6 +102,39 @@ const fileToBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
+// 参考图压缩：手机原图 base64 可达 3-10MB，多张直接超过代理层
+// 请求体上限（Tengine 502 的典型来源）。压到长边 2048 / JPEG 0.85。
+const REF_MAX_EDGE = 2048;
+
+const compressRefImage = (file) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const maxEdge = Math.max(width, height);
+      if (maxEdge > REF_MAX_EDGE) {
+        const ratio = REF_MAX_EDGE / maxEdge;
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      // PNG 透明图保留 PNG，其余转 JPEG 减小体积
+      const isPng = (file.type || '').includes('png');
+      resolve(canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      // 解码失败（如不支持的格式）回退为原始 base64
+      fileToBase64(file).then(resolve).catch(reject);
+    };
+    img.src = url;
+  });
+
 const loadHistory = () => {
   try { return JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]'); }
   catch { return []; }
@@ -183,7 +216,7 @@ const ImageStudio = () => {
       if (!rawFile) continue;
       if (picked.length >= MAX_REF_IMAGES) break;
       try {
-        const dataUrl = await fileToBase64(rawFile);
+        const dataUrl = await compressRefImage(rawFile);
         picked.push({ dataUrl, name: rawFile.name || 'image' });
       } catch { showError(t('图片读取失败：') + (rawFile.name || '')); }
     }
