@@ -148,6 +148,23 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// Subscription billing (plans, purchase, admin management)
+		supportRoute := apiRouter.Group("/support")
+		supportRoute.Use(middleware.UserAuth())
+		{
+			supportRoute.GET("/conversation", controller.GetSupportConversation)
+			supportRoute.POST("/message", middleware.CriticalRateLimit(), controller.SendSupportMessage)
+			supportRoute.GET("/unread", controller.GetSupportUnread)
+		}
+		supportAdminRoute := apiRouter.Group("/support/admin")
+		supportAdminRoute.Use(middleware.AdminAuth())
+		{
+			supportAdminRoute.GET("/conversations", controller.ListSupportConversationsAdmin)
+			supportAdminRoute.GET("/conversations/:id", controller.GetSupportConversationAdmin)
+			supportAdminRoute.POST("/conversations/:id/message", controller.SendSupportMessageAdmin)
+			supportAdminRoute.PUT("/conversations/:id/status", controller.SetSupportConversationStatusAdmin)
+			supportAdminRoute.GET("/unread", controller.GetSupportUnreadAdmin)
+		}
+
 		subscriptionRoute := apiRouter.Group("/subscription")
 		subscriptionRoute.Use(middleware.UserAuth())
 		{

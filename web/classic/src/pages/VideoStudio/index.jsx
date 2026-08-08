@@ -15,7 +15,13 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Button,
@@ -29,7 +35,8 @@ import {
   TextArea,
   Typography,
 } from '@douyinfe/semi-ui';
-import { Clapperboard, Clock } from 'lucide-react';
+import { Tooltip, Banner, Collapsible } from '@douyinfe/semi-ui';
+import { Clapperboard, Clock, Info, Download } from 'lucide-react';
 import { UserContext } from '../../context/User';
 import { API, showError, showSuccess, processGroupsData } from '../../helpers';
 
@@ -40,6 +47,19 @@ const TOKEN_STORAGE_KEY = 'video_studio_token';
 const IMAGE_TOKEN_STORAGE_KEY = 'imagestudio_token';
 const HISTORY_STORAGE_KEY = 'video_studio_history';
 const SETTINGS_STORAGE_KEY = 'video_studio_settings';
+const RUNNING_STORAGE_KEY = 'video_studio_running';
+
+// 高级参数的示例与占位符：客户照抄即可
+const EXTRA_EXAMPLE = `{
+  "seed": 42,
+  "camera_fixed": false
+}`;
+
+const EXTRA_PLACEHOLDER = `写文字（追加到提示词）：
+镜头缓慢推进，暖色调，胶片颗粒
+
+或写 JSON（合并为请求字段）：
+{ "seed": 42 }`;
 const MAX_HISTORY = 50;
 
 const MAX_REF_IMAGES = 9;
@@ -58,14 +78,49 @@ const ASPECT_OPTIONS = [
   { label: '21:9', value: '21:9' },
 ];
 
-// 清晰度不作为 model 写死项，改为写入 prompt 的提示信息
-const RESOLUTION_OPTIONS = [
-  { label: '不指定', value: '' },
-  { label: '720p', value: '720p' },
-  { label: '1080p', value: '1080p' },
-  { label: '2K', value: '2k' },
-  { label: '4K', value: '4k' },
+// 清晰度由完整 model 名决定（文档第 3、10 节：resolution 字段不改变实际清晰度）
+// 所以分辨率不是独立可选项，而是从模型名解析出来的只读展示值。
+const RESOLUTION_PATTERNS = [
+  { label: '4K', re: /(^|[-_/])4k([-_/]|$)/i },
+  { label: '2K', re: /(^|[-_/])2k([-_/]|$)/i },
+  { label: '1080P', re: /1080p/i },
+  { label: '720P', re: /720p/i },
+  { label: '540P', re: /540p/i },
+  { label: '480P', re: /480p/i },
 ];
+
+const parseResolution = (modelId) => {
+  const id = String(modelId || '');
+  const hit = RESOLUTION_PATTERNS.find((item) => item.re.test(id));
+  return hit ? hit.label : '';
+};
+
+// 从模型名推断素材能力（文档第 5、6 节）
+const parseModelCapability = (modelId) => {
+  const id = String(modelId || '').toLowerCase();
+  const isSeedance = id.includes('seedance');
+  const isFast = id.includes('fast');
+  const isVideoSuffix = /-video($|-)/.test(id);
+
+  if (!isSeedance) {
+    // 非 Seedance 模型不套用本文档限制，交给上游校验
+    return {
+      known: false,
+      refVideo: true,
+      refVideoRequired: false,
+      frames: true,
+    };
+  }
+  return {
+    known: true,
+    // 参考视频仅标准版 *-video 模型支持
+    refVideo: isVideoSuffix && !isFast,
+    // *-video 模型必须至少传一个参考视频，否则请求失败
+    refVideoRequired: isVideoSuffix && !isFast,
+    // 首尾帧仅标准版非 -video 模型支持，Fast 不支持
+    frames: !isFast && !isVideoSuffix,
+  };
+};
 
 // 视频模型识别关键字，用于把视频模型排到列表前面
 const VIDEO_MODEL_KEYWORDS = [
@@ -166,13 +221,145 @@ const extractVideoUrl = (data) => {
   );
 };
 
-// 清晰度/比例等约束以提示词形式追加，不改写 model
-const buildPromptSuffix = (resolution, aspect, extraJson) => {
-  const parts = [];
-  if (resolution) parts.push(`分辨率 ${resolution}`);
-  if (aspect) parts.push(`画面比例 ${aspect}`);
-  if (extraJson.trim()) parts.push(extraJson.trim());
-  return parts;
+/**
+ * 后端代理地址。上游 result_url 是第三方对象存储的带签名临时链接：
+ * 跨域、带过期时间，<video> 播不了、a[download] 也存不下来。
+ * 后端 /v1/videos/:task_id/content 会代为取流并加上正确的响应头。
+ */
+const buildProxyUrl = (taskId) => `/v1/videos/${taskId}/content`;
+
+/**
+ * 进行中任务的落盘。生成本身在服务端跑，前端只是轮询，
+ * 所以刷新/关页不会中断任务；存下 task_id 就能回来接着看。
+ */
+const saveRunning = (info) => {
+  try {
+    localStorage.setItem(
+      RUNNING_STORAGE_KEY,
+      JSON.stringify({ ...info, startedAt: Date.now() }),
+    );
+  } catch (e) {
+    // 忽略配额错误
+  }
+};
+
+const loadRunning = () => {
+  try {
+    const raw = localStorage.getItem(RUNNING_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.taskId) return null;
+    // 超过 30 分钟的记录视为过期，避免永远卡在“恢复中”
+    if (Date.now() - (parsed.startedAt || 0) > 30 * 60 * 1000) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+};
+
+const clearRunning = () => {
+  try {
+    localStorage.removeItem(RUNNING_STORAGE_KEY);
+  } catch (e) {
+    // 忽略
+  }
+};
+
+// 高级参数示例，给用户一个可直接套用的模板
+const EXTRA_JSON_TEMPLATE = `{
+  "camerafixed": false,
+  "watermark": false,
+  "seed": 12345
+}`;
+
+/**
+ * 解析「高级参数」输入框。
+ * 支持两种写法：
+ *  1. JSON 对象 —— 直接作为接口字段合并进请求体（覆盖同名字段）
+ *  2. 普通文本 —— 追加到提示词末尾
+ */
+const parseExtra = (raw) => {
+  const text = String(raw || '').trim();
+  if (!text) return { fields: {}, promptExtra: '', error: '' };
+  if (!text.startsWith('{')) {
+    return { fields: {}, promptExtra: text, error: '' };
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { fields: {}, promptExtra: '', error: 'JSON 必须是一个对象' };
+    }
+    return { fields: parsed, promptExtra: '', error: '' };
+  } catch (e) {
+    return {
+      fields: {},
+      promptExtra: '',
+      error: `JSON 格式错误：${e.message}`,
+    };
+  }
+};
+
+/** 构造最终请求体，UI 预览和实际提交共用同一份逻辑，保证所见即所得 */
+const buildPayload = (opts) => {
+  const {
+    model,
+    prompt,
+    aspect,
+    duration,
+    group,
+    refImages,
+    refVideos,
+    refAudios,
+    firstImage,
+    lastImage,
+    extraRaw,
+  } = opts;
+
+  const extra = parseExtra(extraRaw);
+  const basePrompt = String(prompt || '').trim();
+  const finalPrompt =
+    extra.promptExtra && !basePrompt.includes(extra.promptExtra)
+      ? `${basePrompt}，${extra.promptExtra}`
+      : basePrompt;
+
+  const safeDuration = Math.min(
+    DURATION_MAX,
+    Math.max(DURATION_MIN, Number(duration) || DURATION_MIN),
+  );
+
+  // 清晰度不进请求体：由 model 名决定（文档第 3 节）
+  const payload = {
+    model: String(model || '').trim(),
+    prompt: finalPrompt,
+    duration: safeDuration,
+  };
+  if (aspect) payload.size = aspect;
+  if (group) payload.group = group;
+  if (refImages?.length) payload.referenceImages = refImages;
+  if (refVideos?.length) payload.referenceVideos = refVideos;
+  if (refAudios?.length) payload.referenceAudios = refAudios;
+  if (firstImage) payload.first_image = firstImage;
+  if (lastImage) payload.last_image = lastImage;
+
+  // 高级 JSON 字段最后合并，允许覆盖上面任何字段
+  Object.assign(payload, extra.fields);
+  return { payload, error: extra.error };
+};
+
+/** base64 素材在预览里折叠，避免几 MB 的串糊满屏幕 */
+const previewSafe = (payload) => {
+  const clone = JSON.parse(JSON.stringify(payload));
+  const shorten = (v) =>
+    typeof v === 'string' && v.startsWith('data:')
+      ? `${v.slice(0, v.indexOf(',') + 1)}…(${Math.round(v.length / 1024)}KB base64)`
+      : v;
+  ['referenceImages', 'referenceVideos', 'referenceAudios'].forEach((k) => {
+    if (Array.isArray(clone[k])) clone[k] = clone[k].map(shorten);
+  });
+  ['first_image', 'last_image'].forEach((k) => {
+    if (clone[k]) clone[k] = shorten(clone[k]);
+  });
+  return JSON.stringify(clone, null, 2);
 };
 const VideoStudio = () => {
   const { t } = useTranslation();
@@ -186,11 +373,87 @@ const VideoStudio = () => {
   const [group, setGroup] = useState(saved.group || '');
   const [prompt, setPrompt] = useState('');
 
-  const [resolution, setResolution] = useState(saved.resolution ?? '1080p');
   const [aspect, setAspect] = useState(saved.aspect || '16:9');
   const [duration, setDuration] = useState(saved.duration || 6);
-  // 额外 JSON / 提示片段，会拼进 prompt
+  // 高级参数：JSON 对象合并进请求体，普通文本追加到提示词
   const [extraJson, setExtraJson] = useState(saved.extraJson || '');
+  const [showPreview, setShowPreview] = useState(false);
+
+  // 清晰度是模型名的派生值，不可单独设置
+  const resolution = parseResolution(model);
+  const capability = parseModelCapability(model);
+
+  // 进行中的任务：刷新/关页后靠它恢复轮询
+  const [activeTaskId, setActiveTaskId] = useState('');
+
+  // 实时预览：任何设置变化都会立刻反映到 prompt 和请求体
+  const { payload: previewPayload, error: extraError } = useMemo(
+    () =>
+      buildPayload({
+        model,
+        prompt,
+        aspect,
+        duration,
+        group,
+        refImages: refImages.map((it) => it.value),
+        refVideos: refVideos.map((it) => it.value),
+        refAudios: refAudios.map((it) => it.value),
+        firstImage: firstImage?.value || '',
+        lastImage: lastImage?.value || '',
+        extraRaw: extraJson,
+      }),
+    [
+      model,
+      prompt,
+      aspect,
+      duration,
+      group,
+      refImages,
+      refVideos,
+      refAudios,
+      firstImage,
+      lastImage,
+      extraJson,
+    ],
+  );
+
+  /**
+   * 下载：上游直链跨域，a[download] 会被浏览器降级成跳转。
+   * 走 blob 落盘才能真正存下文件。
+   */
+  const downloadVideo = useCallback(
+    async (url, index) => {
+      try {
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `video-${Date.now()}-${index + 1}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+      } catch (e) {
+        showError(`${t('下载失败')}：${e.message}`);
+      }
+    },
+    [t],
+  );
+
+  // 预览里把 base64 素材缩略，否则几 MB 的串会糊满屏幕
+  const previewText = useMemo(() => {
+    const shorten = (v) =>
+      typeof v === 'string' && v.length > 80
+        ? `${v.slice(0, 60)}…(${v.length} 字符)`
+        : v;
+    const view = {};
+    Object.entries(previewPayload).forEach(([k, v]) => {
+      view[k] = Array.isArray(v) ? v.map(shorten) : shorten(v);
+    });
+    return JSON.stringify(view, null, 2);
+  }, [previewPayload]);
 
   const [refImages, setRefImages] = useState([]);
   const [refVideos, setRefVideos] = useState([]);
@@ -228,19 +491,12 @@ const VideoStudio = () => {
     try {
       localStorage.setItem(
         SETTINGS_STORAGE_KEY,
-        JSON.stringify({
-          model,
-          group,
-          resolution,
-          aspect,
-          duration,
-          extraJson,
-        }),
+        JSON.stringify({ model, group, aspect, duration, extraJson }),
       );
     } catch (e) {
       // 存储配额不足时忽略
     }
-  }, [model, group, resolution, aspect, duration, extraJson]);
+  }, [model, group, aspect, duration, extraJson]);
 
   const loadModels = useCallback(
     async (silent = false) => {
@@ -440,12 +696,9 @@ const VideoStudio = () => {
           status === 'SUCCEEDED' ||
           status === 'COMPLETED'
         ) {
-          const url = extractVideoUrl(data);
-          if (url) return [url];
-          const msg = t('任务成功但未返回视频地址');
-          setErrorMsg(msg);
-          showError(msg);
-          return null;
+          // 上游 result_url 是第三方带签名的临时地址：跨域、会过期，
+          // 浏览器既播不了也下载不了。统一走后端代理按 task_id 取流。
+          return [buildProxyUrl(taskId)];
         }
         if (status === 'FAILURE' || status === 'FAILED') {
           const msg =
@@ -465,6 +718,49 @@ const VideoStudio = () => {
     },
     [authHeaders, t],
   );
+
+  /**
+   * 挂载时恢复未完成的任务。
+   * 生成在服务端进行，前端刷新只是丢了轮询循环，任务不会停。
+   */
+  useEffect(() => {
+    const running = loadRunning();
+    if (!running) return;
+    let cancelled = false;
+    (async () => {
+      setActiveTaskId(running.taskId);
+      setLoading(true);
+      setProgress(t('正在恢复上次的生成任务…'));
+      if (running.prompt) setPrompt((prev) => prev || running.prompt);
+      const urls = await pollTask(running.taskId);
+      if (cancelled) return;
+      clearRunning();
+      setActiveTaskId('');
+      setLoading(false);
+      if (!urls) return;
+      setVideos(urls);
+      showSuccess(t('已恢复上次的生成结果'));
+      persistHistory([
+        {
+          id: `${running.taskId}-${Date.now()}`,
+          taskId: running.taskId,
+          ts: new Date().toLocaleString(),
+          prompt: running.prompt || '',
+          model: running.model || '',
+          resolution: parseResolution(running.model || ''),
+          aspect: running.aspect || '',
+          duration: running.duration || '',
+          urls,
+        },
+        ...loadHistory(),
+      ]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // 仅在挂载时执行一次
+  }, []);
+
   const handleGenerate = useCallback(async () => {
     if (!token.trim()) {
       showError(t('请先填写令牌'));
@@ -483,32 +779,33 @@ const VideoStudio = () => {
     setProgress('');
     setVideos([]);
     try {
-      const safeDuration = Math.min(
-        DURATION_MAX,
-        Math.max(DURATION_MIN, Number(duration) || DURATION_MIN),
-      );
       const basePrompt = prompt.trim();
-      // 分辨率、比例、附加 JSON 都写进 prompt，不改写 model
-      const suffix = buildPromptSuffix(resolution, aspect, extraJson).filter(
-        (part) => !basePrompt.includes(part),
-      );
-      const finalPrompt = suffix.length
-        ? `${basePrompt}，${suffix.join('，')}`
-        : basePrompt;
-
-      const usingModel = model.trim();
-      const payload = {
-        model: usingModel,
-        prompt: finalPrompt,
-        size: aspect,
-        duration: safeDuration,
-      };
-      if (group) payload.group = group;
-      if (refImages.length) payload.referenceImages = refImages;
-      if (refVideos.length) payload.referenceVideos = refVideos;
-      if (refAudios.length) payload.referenceAudios = refAudios;
-      if (firstImage) payload.first_image = firstImage;
-      if (lastImage) payload.last_image = lastImage;
+      const { payload, error: buildError } = buildPayload({
+        model,
+        prompt,
+        aspect,
+        duration,
+        group,
+        refImages: refImages.map((it) => it.value),
+        refVideos: capability.refVideo ? refVideos.map((it) => it.value) : [],
+        refAudios: refAudios.map((it) => it.value),
+        firstImage: capability.frames ? firstImage?.value || '' : '',
+        lastImage: capability.frames ? lastImage?.value || '' : '',
+        extraRaw: extraJson,
+      });
+      if (buildError) {
+        setErrorMsg(buildError);
+        showError(buildError);
+        return;
+      }
+      // 文档要求：*-video 标准模型必须带参考视频
+      if (capability.refVideoRequired && !payload.referenceVideos?.length) {
+        const msg = t('当前模型必须上传至少一个参考视频');
+        setErrorMsg(msg);
+        showError(msg);
+        return;
+      }
+      const usingModel = payload.model;
 
       // 视频是异步任务：先提交拿 task_id，再轮询任务状态
       const submitRes = await API.post('/v1/video/generations', payload, {
@@ -532,24 +829,39 @@ const VideoStudio = () => {
         return;
       }
 
+      // 记下进行中的任务：刷新或关页面后可以接着轮询，任务本身在服务端继续跑
+      setActiveTaskId(taskId);
+      saveRunning({
+        taskId,
+        prompt: basePrompt,
+        model: usingModel,
+        aspect,
+        duration: payload.duration,
+      });
+
       const finalUrls = await pollTask(taskId);
+      clearRunning();
+      setActiveTaskId('');
       if (!finalUrls) return;
       setVideos(finalUrls);
       showSuccess(t('生成成功'));
       persistHistory([
         {
           id: `${taskId}-${Date.now()}`,
+          taskId,
           ts: new Date().toLocaleString(),
           prompt: basePrompt,
           model: usingModel,
           resolution,
           aspect,
-          duration: safeDuration,
+          duration: payload.duration,
           urls: finalUrls,
         },
         ...history,
       ]);
     } catch (error) {
+      clearRunning();
+      setActiveTaskId('');
       const msg =
         error?.response?.data?.error?.message ||
         error?.response?.data?.message ||
@@ -574,6 +886,7 @@ const VideoStudio = () => {
     refAudios,
     firstImage,
     lastImage,
+    capability,
     authHeaders,
     history,
     persistHistory,
@@ -713,15 +1026,23 @@ const VideoStudio = () => {
               </div>
             </div>
 
-            {/* 分辨率 + 比例 + 时长 */}
+            {/* 分辨率随模型名自动确定（文档第 3 节），不可单独选 */}
             <div className='flex flex-col sm:flex-row gap-4'>
               <div className='flex-1'>
                 <Text strong>{t('分辨率')}</Text>
-                <Select
-                  value={resolution}
-                  onChange={setResolution}
-                  optionList={RESOLUTION_OPTIONS}
+                <Input
+                  value={resolution || t('随模型自动')}
+                  readonly
                   className='mt-1 w-full'
+                  suffix={
+                    <Tooltip
+                      content={t(
+                        '清晰度由模型名决定，例如 -720p / -1080p。想换清晰度请直接换模型，不存在“720p 模型配 1080p”这种组合。',
+                      )}
+                    >
+                      <Info size={14} className='opacity-60' />
+                    </Tooltip>
+                  }
                 />
               </div>
               <div className='flex-1'>
@@ -760,16 +1081,75 @@ const VideoStudio = () => {
               />
             </div>
 
-            {/* 附加提示词 / JSON */}
+            {/* 附加提示词 / JSON：带格式说明和可套用模板 */}
             <div>
-              <Text strong>{t('附加提示词 / JSON（可选）')}</Text>
+              <div className='flex items-center gap-2'>
+                <Text strong>{t('高级参数（可选）')}</Text>
+                <Tooltip
+                  content={t(
+                    '两种写法：1) 直接写普通文字，会追加到提示词末尾；2) 写 JSON 对象（以 { 开头），会作为请求字段合并，可覆盖上面的设置。',
+                  )}
+                >
+                  <Info size={14} className='opacity-60' />
+                </Tooltip>
+                <Button
+                  size='small'
+                  theme='borderless'
+                  onClick={() => setExtraJson(EXTRA_EXAMPLE)}
+                >
+                  {t('填入示例')}
+                </Button>
+              </div>
+              <Text type='tertiary' size='small'>
+                {t(
+                  '留空即可。填文字＝追加到提示词；填 { } JSON＝合并为请求字段。',
+                )}
+              </Text>
               <TextArea
                 value={extraJson}
                 onChange={setExtraJson}
-                autosize={{ minRows: 2, maxRows: 10 }}
-                placeholder={t('例如镜头脚本 JSON，会追加到提示词末尾')}
+                autosize={{ minRows: 3, maxRows: 12 }}
+                placeholder={EXTRA_PLACEHOLDER}
                 className='mt-1'
+                validateStatus={extraError ? 'error' : 'default'}
               />
+              {extraError && (
+                <Text type='danger' size='small'>
+                  {extraError}
+                </Text>
+              )}
+            </div>
+
+            {/* 实时请求预览：让用户看清每个设置对 prompt / 请求体的影响 */}
+            <div>
+              <div className='flex items-center gap-2'>
+                <Button
+                  size='small'
+                  theme='borderless'
+                  onClick={() => setShowPreview((v) => !v)}
+                >
+                  {showPreview ? t('收起请求预览') : t('查看请求预览')}
+                </Button>
+                <Text type='tertiary' size='small'>
+                  {t('这就是点击生成时实际发送的内容')}
+                </Text>
+              </div>
+              <Collapsible isOpen={showPreview}>
+                <div className='mt-2'>
+                  <Text strong size='small'>
+                    {t('最终提示词')}
+                  </Text>
+                  <pre className='mt-1 mb-2 p-2 rounded bg-black/5 text-xs whitespace-pre-wrap break-all'>
+                    {previewPayload.prompt || t('（空）')}
+                  </pre>
+                  <Text strong size='small'>
+                    {t('请求体 JSON')}
+                  </Text>
+                  <pre className='mt-1 p-2 rounded bg-black/5 text-xs whitespace-pre-wrap break-all'>
+                    {previewText}
+                  </pre>
+                </div>
+              </Collapsible>
             </div>
 
             {renderMaterialRow(
@@ -876,13 +1256,33 @@ const VideoStudio = () => {
                 <Tag>{duration}s</Tag>
               </div>
               {videos.map((url, index) => (
-                <video
-                  key={index}
-                  src={url}
-                  controls
-                  className='w-full rounded'
-                  style={{ maxHeight: 420, background: '#000' }}
-                />
+                <div key={index} className='flex flex-col gap-2'>
+                  <video
+                    src={url}
+                    controls
+                    preload='metadata'
+                    playsInline
+                    crossOrigin='anonymous'
+                    className='w-full rounded'
+                    style={{ maxHeight: 420, background: '#000' }}
+                  />
+                  <div className='flex gap-2'>
+                    <Button
+                      size='small'
+                      icon={<Download size={14} />}
+                      onClick={() => downloadVideo(url, index)}
+                    >
+                      {t('下载视频')}
+                    </Button>
+                    <Button
+                      size='small'
+                      theme='borderless'
+                      onClick={() => window.open(url, '_blank')}
+                    >
+                      {t('新窗口打开')}
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}

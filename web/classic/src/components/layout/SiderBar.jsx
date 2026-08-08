@@ -50,6 +50,7 @@ const routerMap = {
   playground: '/console/playground',
   videostudio: '/console/videostudio',
   imagestudio: '/console/imagestudio',
+  support: '/console/support',
   personal: '/console/personal',
 };
 
@@ -218,6 +219,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('0帧生图'),
         itemKey: 'imagestudio',
         to: '/imagestudio',
+      },
+      {
+        text: t('在线客服'),
+        itemKey: 'support',
+        to: '/support',
       },
       {
         text: t('聊天'),

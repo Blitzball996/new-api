@@ -401,6 +401,21 @@ const ImageStudio = () => {
   const isRunning = submitting;
   const refImageDisabled = !supportsRefImage(model || '');
 
+  /**
+   * 生图是同步请求，连接断了结果就拿不回来，
+   * 所以生成中离开页面前拦一道浏览器确认框。
+   */
+  useEffect(() => {
+    if (!isRunning) return undefined;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isRunning]);
+
   return (
     <div className='mt-[64px] px-2 pb-6'>
       <div className='mx-auto max-w-3xl flex flex-col gap-4 pt-6'>

@@ -81,6 +81,7 @@ import {
   Server,
   CalendarClock,
   Clapperboard,
+  Headphones,
   ImageIcon,
 } from 'lucide-react';
 import {
@@ -131,6 +132,8 @@ export function getLucideIcon(key, selected = false) {
       return <Clapperboard {...commonProps} color={iconColor} />;
     case 'imagestudio':
       return <ImageIcon {...commonProps} color={iconColor} />;
+    case 'support':
+      return <Headphones {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
     case 'token':
