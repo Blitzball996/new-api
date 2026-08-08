@@ -31,6 +31,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     playground: true,
     videostudio: true,
     imagestudio: true,
+    support: true,
     chat: true,
   },
   console: {

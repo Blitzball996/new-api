@@ -386,6 +386,14 @@ const VideoStudio = () => {
   // 进行中的任务：刷新/关页后靠它恢复轮询
   const [activeTaskId, setActiveTaskId] = useState('');
 
+  // 素材状态必须先声明：下面的预览 useMemo 在渲染期同步读取它们，
+  // 若放在 useMemo 之后会命中 const 的 TDZ 导致整页 ReferenceError
+  const [refImages, setRefImages] = useState([]);
+  const [refVideos, setRefVideos] = useState([]);
+  const [refAudios, setRefAudios] = useState([]);
+  const [firstImage, setFirstImage] = useState('');
+  const [lastImage, setLastImage] = useState('');
+
   // 实时预览：任何设置变化都会立刻反映到 prompt 和请求体
   const { payload: previewPayload, error: extraError } = useMemo(
     () =>
@@ -454,12 +462,6 @@ const VideoStudio = () => {
     });
     return JSON.stringify(view, null, 2);
   }, [previewPayload]);
-
-  const [refImages, setRefImages] = useState([]);
-  const [refVideos, setRefVideos] = useState([]);
-  const [refAudios, setRefAudios] = useState([]);
-  const [firstImage, setFirstImage] = useState('');
-  const [lastImage, setLastImage] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [videos, setVideos] = useState([]);
