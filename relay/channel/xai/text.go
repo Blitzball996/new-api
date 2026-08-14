@@ -68,8 +68,13 @@ func xAIStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	})
 
 	if !containStreamUsage {
-		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
-		usage.CompletionTokens += toolCount * 7
+		if info.ShouldEstimateUsage() {
+			usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+			usage.CompletionTokens += toolCount * 7
+		} else {
+			// 上游一条响应都没返回（客户端断开/超时），不能用预估的 prompt tokens 计费
+			usage = &dto.Usage{}
+		}
 	}
 
 	helper.Done(c)

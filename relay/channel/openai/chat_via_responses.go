@@ -55,8 +55,8 @@ func OaiResponsesToChatHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	if oaiError := responsesResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
-		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	if oaiError := responsesResp.GetOpenAIError(); oaiError.IsUpstreamError() {
+		return nil, types.WithOpenAIError(*oaiError, oaiError.HTTPStatusCode(resp.StatusCode))
 	}
 
 	chatId := helper.GetResponseID(c)
@@ -497,8 +497,8 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 
 		case "response.error", "response.failed":
 			if streamResp.Response != nil {
-				if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
-					streamErr = types.WithOpenAIError(*oaiErr, http.StatusInternalServerError)
+				if oaiErr := streamResp.Response.GetOpenAIError(); oaiErr.IsUpstreamError() {
+					streamErr = types.WithOpenAIError(*oaiErr, oaiErr.HTTPStatusCode(http.StatusInternalServerError))
 					sr.Stop(streamErr)
 					return
 				}
@@ -515,7 +515,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 		return nil, streamErr
 	}
 
-	if usage.TotalTokens == 0 {
+	if usage.TotalTokens == 0 && info.ShouldEstimateUsage() {
 		usage = service.ResponseText2Usage(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
 

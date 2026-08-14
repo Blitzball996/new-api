@@ -175,8 +175,14 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	if !containStreamUsage {
-		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
-		usage.CompletionTokens += toolCount * 7
+		if info.ShouldEstimateUsage() {
+			usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+			usage.CompletionTokens += toolCount * 7
+		} else {
+			// 上游一条响应都没返回（客户端断开/超时），不能用预估的 prompt tokens 计费
+			logger.LogError(c, fmt.Sprintf("stream ended without any upstream response, skip usage estimation: %s", info.StreamStatus.Summary()))
+			usage = &dto.Usage{}
+		}
 	}
 
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
@@ -216,8 +222,8 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	if oaiError := simpleResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
-		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	if oaiError := simpleResponse.GetOpenAIError(); oaiError.IsUpstreamError() {
+		return nil, types.WithOpenAIError(*oaiError, oaiError.HTTPStatusCode(resp.StatusCode))
 	}
 
 	for _, choice := range simpleResponse.Choices {

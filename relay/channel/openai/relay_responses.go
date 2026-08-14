@@ -30,8 +30,8 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
-	if oaiError := responsesResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
-		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	if oaiError := responsesResponse.GetOpenAIError(); oaiError.IsUpstreamError() {
+		return nil, types.WithOpenAIError(*oaiError, oaiError.HTTPStatusCode(resp.StatusCode))
 	}
 
 	if responsesResponse.HasImageGenerationCall() {

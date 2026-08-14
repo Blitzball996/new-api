@@ -792,8 +792,8 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		common.SysLog("error unmarshalling stream response: " + err.Error())
 		return types.NewError(err, types.ErrorCodeBadResponseBody)
 	}
-	if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
-		return types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+	if claudeError := claudeResponse.GetClaudeError(); claudeError.IsUpstreamError() {
+		return types.WithClaudeError(*claudeError, claudeError.HTTPStatusCode(http.StatusInternalServerError))
 	}
 	if claudeResponse.StopReason != "" {
 		maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
@@ -840,16 +840,24 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 		if common.DebugEnabled {
 			common.SysLog("claude response usage is not complete, maybe upstream error")
 		}
-		// 只补缺失字段，不整份覆盖——保留 message_start 已拿到的 cache 字段
-		fallback := service.ResponseText2Usage(c, claudeInfo.ResponseText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
-		if claudeInfo.Usage.CompletionTokens == 0 ||
-			(!claudeInfo.Done && fallback.CompletionTokens > claudeInfo.Usage.CompletionTokens) {
-			claudeInfo.Usage.CompletionTokens = fallback.CompletionTokens
+		if !info.ShouldEstimateUsage() {
+			// 上游一条响应都没返回（客户端断开/超时），不能用预估的 prompt tokens 计费
+			logger.LogError(c, fmt.Sprintf("stream ended without any upstream response, skip usage estimation: %s", info.StreamStatus.Summary()))
+			claudeInfo.Usage.PromptTokens = 0
+			claudeInfo.Usage.CompletionTokens = 0
+			claudeInfo.Usage.TotalTokens = 0
+		} else {
+			// 只补缺失字段，不整份覆盖——保留 message_start 已拿到的 cache 字段
+			fallback := service.ResponseText2Usage(c, claudeInfo.ResponseText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+			if claudeInfo.Usage.CompletionTokens == 0 ||
+				(!claudeInfo.Done && fallback.CompletionTokens > claudeInfo.Usage.CompletionTokens) {
+				claudeInfo.Usage.CompletionTokens = fallback.CompletionTokens
+			}
+			if claudeInfo.Usage.PromptTokens == 0 {
+				claudeInfo.Usage.PromptTokens = fallback.PromptTokens
+			}
+			claudeInfo.Usage.TotalTokens = claudeInfo.Usage.PromptTokens + claudeInfo.Usage.CompletionTokens
 		}
-		if claudeInfo.Usage.PromptTokens == 0 {
-			claudeInfo.Usage.PromptTokens = fallback.PromptTokens
-		}
-		claudeInfo.Usage.TotalTokens = claudeInfo.Usage.PromptTokens + claudeInfo.Usage.CompletionTokens
 	}
 	if claudeInfo.Usage != nil {
 		claudeInfo.Usage.UsageSemantic = "anthropic"
@@ -899,8 +907,8 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeBadResponseBody)
 	}
-	if claudeError := claudeResponse.GetClaudeError(); claudeError != nil && claudeError.Type != "" {
-		return types.WithClaudeError(*claudeError, http.StatusInternalServerError)
+	if claudeError := claudeResponse.GetClaudeError(); claudeError.IsUpstreamError() {
+		return types.WithClaudeError(*claudeError, claudeError.HTTPStatusCode(http.StatusInternalServerError))
 	}
 	maybeMarkClaudeRefusal(c, claudeResponse.StopReason)
 	if claudeInfo.Usage == nil {

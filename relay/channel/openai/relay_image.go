@@ -46,8 +46,8 @@ func OpenaiImageHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
-	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
-		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	if oaiError := usageResp.GetOpenAIError(); oaiError.IsUpstreamError() {
+		return nil, types.WithOpenAIError(*oaiError, oaiError.HTTPStatusCode(resp.StatusCode))
 	}
 
 	// 写入新的 response body
@@ -218,8 +218,8 @@ func OpenaiImageJSONAsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo,
 
 	var usageResp dto.SimpleResponse
 	_ = common.Unmarshal(responseBody, &usageResp)
-	if oaiError := usageResp.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
-		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	if oaiError := usageResp.GetOpenAIError(); oaiError.IsUpstreamError() {
+		return nil, types.WithOpenAIError(*oaiError, oaiError.HTTPStatusCode(resp.StatusCode))
 	}
 	normalizeOpenAIUsage(&usageResp.Usage)
 	applyUsagePostProcessing(info, &usageResp.Usage, responseBody)

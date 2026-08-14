@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -21,6 +22,94 @@ type OpenAIError struct {
 type ClaudeError struct {
 	Type    string `json:"type,omitempty"`
 	Message string `json:"message,omitempty"`
+}
+
+// upstreamRateLimitKeywords 上游限流错误的特征词，用于在上游以 2xx 返回错误体时推断状态码。
+var upstreamRateLimitKeywords = []string{
+	"rate limit",
+	"rate_limit",
+	"ratelimit",
+	"too many requests",
+	"resource_exhausted",
+	"请求过于频繁",
+	"负载已饱和",
+	"限流",
+}
+
+// normalizeErrorCode 将 error.code 归一化为字符串，零值（nil、空串、0）视为未提供。
+func normalizeErrorCode(code any) string {
+	if code == nil {
+		return ""
+	}
+	codeStr := strings.TrimSpace(fmt.Sprintf("%v", code))
+	if codeStr == "0" || codeStr == "<nil>" {
+		return ""
+	}
+	return codeStr
+}
+
+// containsRateLimitKeyword 判断任意一段错误文本是否表示上游限流。
+func containsRateLimitKeyword(parts ...string) bool {
+	for _, part := range parts {
+		lowerPart := strings.ToLower(part)
+		for _, keyword := range upstreamRateLimitKeywords {
+			if strings.Contains(lowerPart, keyword) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// IsUpstreamError 判断上游响应体中的 error 字段是否表示一个真实错误。
+// 部分上游（尤其是二级中转）返回的错误体只有 message/code 而不带 type，
+// 若仅以 type 判断，错误响应会被当成正常响应继续走计费流程。
+func (e *OpenAIError) IsUpstreamError() bool {
+	if e == nil {
+		return false
+	}
+	if e.Type != "" || strings.TrimSpace(e.Message) != "" {
+		return true
+	}
+	return normalizeErrorCode(e.Code) != ""
+}
+
+// HTTPStatusCode 在上游用 2xx 携带错误体时推断出合理的 HTTP 状态码：
+// 优先采用 error.code 中形如 HTTP 状态码的数值，其次识别限流错误返回 429，
+// 都不满足时沿用 fallback（通常为上游状态码）。
+func (e *OpenAIError) HTTPStatusCode(fallback int) int {
+	if e == nil {
+		return fallback
+	}
+	codeStr := normalizeErrorCode(e.Code)
+	if statusCode, err := strconv.Atoi(codeStr); err == nil &&
+		statusCode >= http.StatusBadRequest && statusCode <= 599 {
+		return statusCode
+	}
+	if containsRateLimitKeyword(e.Type, codeStr, e.Message) {
+		return http.StatusTooManyRequests
+	}
+	return fallback
+}
+
+// IsUpstreamError 同 OpenAIError.IsUpstreamError，用于 Claude 格式的响应体。
+func (e *ClaudeError) IsUpstreamError() bool {
+	if e == nil {
+		return false
+	}
+	return e.Type != "" || strings.TrimSpace(e.Message) != ""
+}
+
+// HTTPStatusCode 同 OpenAIError.HTTPStatusCode，Claude 错误体没有 code 字段，
+// 仅按 type/message 识别限流。
+func (e *ClaudeError) HTTPStatusCode(fallback int) int {
+	if e == nil {
+		return fallback
+	}
+	if containsRateLimitKeyword(e.Type, e.Message) {
+		return http.StatusTooManyRequests
+	}
+	return fallback
 }
 
 type ErrorType string

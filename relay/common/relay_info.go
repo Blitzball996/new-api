@@ -652,6 +652,22 @@ func (info *RelayInfo) SetEstimatePromptTokens(promptTokens int) {
 	info.estimatePromptTokens = promptTokens
 }
 
+// ShouldEstimateUsage 判断上游没有返回 usage 时，是否允许用本地预估值计费。
+//
+// 流式请求中，若上游一个响应都没返回（客户端提前断开 client_gone / context canceled、
+// 上游超时、连接被重置等），却仍按 GetEstimatePromptTokens() 计费，
+// 会把整段上下文当成实际消耗，出现"只发了几个 token 却被扣掉几万 token"的异常账单。
+// 这种情况下返回 false，让调用方给出零 usage，由 PostTextConsumeQuota 走"上游无计费信息"分支不扣费。
+//
+// StreamStatus 为 nil 表示该链路没有经过 helper.StreamScannerHandler（如 AWS Bedrock 自行读流），
+// ReceivedResponseCount 不可信，此时保持原有预估行为。
+func (info *RelayInfo) ShouldEstimateUsage() bool {
+	if info == nil || !info.IsStream || info.StreamStatus == nil {
+		return true
+	}
+	return info.ReceivedResponseCount > 0
+}
+
 func (info *RelayInfo) GetEstimatePromptTokens() int {
 	return info.estimatePromptTokens
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -88,10 +89,13 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 	if err != nil {
 		return fmt.Errorf("fetchTask failed for task %s: %w", taskId, err)
 	}
-	//if resp.StatusCode != http.StatusOK {
-	//return fmt.Errorf("get Video Task status code: %d", resp.StatusCode)
-	//}
 	defer resp.Body.Close()
+	// 上游查询失败（如 429 限流、5xx）时直接返回错误，保持任务原状态等待下一轮轮询。
+	// 若继续往下解析，错误响应体会被当成任务结果，解析出空状态后被判为 FAILURE 并触发退款，
+	// 实际上游任务仍在进行中。
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("get video task %s failed, upstream status code: %d", taskId, resp.StatusCode)
+	}
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("readAll failed for task %s: %w", taskId, err)
