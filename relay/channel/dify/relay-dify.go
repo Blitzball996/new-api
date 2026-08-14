@@ -256,8 +256,8 @@ func difyStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.R
 		}
 	})
 	helper.Done(c)
-	if usage.TotalTokens == 0 && info.ShouldEstimateUsage() {
-		usage = service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetEstimatePromptTokens())
+	if usage.TotalTokens == 0 {
+		usage = service.ResponseText2Usage(c, responseText, info.UpstreamModelName, info.GetBillableEstimatePromptTokens())
 	}
 	usage.CompletionTokens += nodeToken
 	return usage, nil

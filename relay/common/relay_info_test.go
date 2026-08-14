@@ -40,7 +40,7 @@ func TestRelayInfoGetFinalRequestRelayFormatNilReceiver(t *testing.T) {
 	require.Equal(t, types.RelayFormat(""), info.GetFinalRequestRelayFormat())
 }
 
-func TestRelayInfoShouldEstimateUsage(t *testing.T) {
+func TestRelayInfoIsStreamAbortedWithoutResponse(t *testing.T) {
 	newStreamInfo := func(received int) *RelayInfo {
 		return &RelayInfo{
 			IsStream:              true,
@@ -49,33 +49,73 @@ func TestRelayInfoShouldEstimateUsage(t *testing.T) {
 		}
 	}
 
-	t.Run("nil receiver keeps estimating", func(t *testing.T) {
+	t.Run("nil receiver", func(t *testing.T) {
 		var info *RelayInfo
-		require.True(t, info.ShouldEstimateUsage())
+		require.False(t, info.IsStreamAbortedWithoutResponse())
 	})
 
-	t.Run("non stream keeps estimating", func(t *testing.T) {
-		require.True(t, (&RelayInfo{}).ShouldEstimateUsage())
+	t.Run("non stream", func(t *testing.T) {
+		require.False(t, (&RelayInfo{}).IsStreamAbortedWithoutResponse())
 	})
 
-	t.Run("stream without scanner keeps estimating", func(t *testing.T) {
+	t.Run("stream without scanner", func(t *testing.T) {
 		// AWS Bedrock 等自行读流的链路没有 StreamStatus，ReceivedResponseCount 不可信
-		require.True(t, (&RelayInfo{IsStream: true}).ShouldEstimateUsage())
+		require.False(t, (&RelayInfo{IsStream: true}).IsStreamAbortedWithoutResponse())
 	})
 
-	t.Run("stream with upstream response estimates", func(t *testing.T) {
-		require.True(t, newStreamInfo(3).ShouldEstimateUsage())
+	t.Run("stream with upstream response", func(t *testing.T) {
+		require.False(t, newStreamInfo(3).IsStreamAbortedWithoutResponse())
 	})
 
-	t.Run("client gone before any response skips estimation", func(t *testing.T) {
+	t.Run("client gone before any response", func(t *testing.T) {
 		info := newStreamInfo(0)
 		info.StreamStatus.SetEndReason(StreamEndReasonClientGone, context.Canceled)
-		require.False(t, info.ShouldEstimateUsage())
+		require.True(t, info.IsStreamAbortedWithoutResponse())
 	})
 
-	t.Run("timeout before any response skips estimation", func(t *testing.T) {
+	t.Run("timeout before any response", func(t *testing.T) {
 		info := newStreamInfo(0)
 		info.StreamStatus.SetEndReason(StreamEndReasonTimeout, nil)
-		require.False(t, info.ShouldEstimateUsage())
+		require.True(t, info.IsStreamAbortedWithoutResponse())
+	})
+}
+
+func TestRelayInfoGetBillableEstimatePromptTokens(t *testing.T) {
+	t.Run("nil receiver", func(t *testing.T) {
+		var info *RelayInfo
+		require.Equal(t, 0, info.GetBillableEstimatePromptTokens())
+	})
+
+	t.Run("non stream keeps full estimate", func(t *testing.T) {
+		info := &RelayInfo{}
+		info.SetEstimatePromptTokens(50000)
+		require.Equal(t, 50000, info.GetBillableEstimatePromptTokens())
+	})
+
+	t.Run("stream with response keeps full estimate", func(t *testing.T) {
+		info := &RelayInfo{IsStream: true, StreamStatus: NewStreamStatus(), ReceivedResponseCount: 1}
+		info.SetEstimatePromptTokens(50000)
+		require.Equal(t, 50000, info.GetBillableEstimatePromptTokens())
+	})
+
+	t.Run("aborted without response applies discount", func(t *testing.T) {
+		info := &RelayInfo{IsStream: true, StreamStatus: NewStreamStatus()}
+		info.StreamStatus.SetEndReason(StreamEndReasonClientGone, context.Canceled)
+		info.SetEstimatePromptTokens(50000)
+		// 默认比例 0.5
+		require.Equal(t, 25000, info.GetBillableEstimatePromptTokens())
+	})
+
+	t.Run("zero estimate stays zero", func(t *testing.T) {
+		info := &RelayInfo{IsStream: true, StreamStatus: NewStreamStatus()}
+		info.StreamStatus.SetEndReason(StreamEndReasonClientGone, context.Canceled)
+		require.Equal(t, 0, info.GetBillableEstimatePromptTokens())
+	})
+
+	t.Run("discount never rounds down to zero", func(t *testing.T) {
+		info := &RelayInfo{IsStream: true, StreamStatus: NewStreamStatus()}
+		info.StreamStatus.SetEndReason(StreamEndReasonClientGone, context.Canceled)
+		info.SetEstimatePromptTokens(1)
+		require.Equal(t, 1, info.GetBillableEstimatePromptTokens())
 	})
 }
