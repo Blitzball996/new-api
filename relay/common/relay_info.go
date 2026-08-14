@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/setting/model_setting"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -652,43 +650,6 @@ func GenRelayInfoResponsesCompaction(c *gin.Context, request *dto.OpenAIResponse
 
 func (info *RelayInfo) SetEstimatePromptTokens(promptTokens int) {
 	info.estimatePromptTokens = promptTokens
-}
-
-// IsStreamAbortedWithoutResponse 判断流式请求是否在上游一条响应都没返回时就断了
-// （客户端提前断开 client_gone / context canceled、上游超时、连接被重置等）。
-//
-// StreamStatus 为 nil 表示该链路没有经过 helper.StreamScannerHandler（如 AWS Bedrock 自行读流），
-// ReceivedResponseCount 不可信，一律按"正常"处理。
-func (info *RelayInfo) IsStreamAbortedWithoutResponse() bool {
-	if info == nil || !info.IsStream || info.StreamStatus == nil {
-		return false
-	}
-	return info.ReceivedResponseCount == 0
-}
-
-// GetBillableEstimatePromptTokens 返回用于计费的预估 prompt tokens。
-//
-// 上游请求不绑定客户端 context（见 relay/channel/api_request.go 的 http.NewRequest），
-// 因此客户端断开时上游已经收下并处理了整个 prompt，这部分成本真实发生，不能按 0 计费。
-// 但本地预估拿不到 cached_tokens，会把命中缓存的部分也按原价算进去，全额计费明显偏高，
-// 所以对中断且上游无响应的请求按 StreamAbortBillingRatio 打折。
-//
-// 正常请求不受影响，仍返回完整预估值。
-func (info *RelayInfo) GetBillableEstimatePromptTokens() int {
-	if info == nil {
-		return 0
-	}
-	tokens := info.estimatePromptTokens
-	if tokens <= 0 || !info.IsStreamAbortedWithoutResponse() {
-		return tokens
-	}
-	billable := int(math.Round(float64(tokens) * operation_setting.GetStreamAbortBillingRatio()))
-	// 比例配成 0 时也至少保留 1 token，保证账单里能看到这次请求，
-	// 而不是被 PostTextConsumeQuota 的 TotalTokens==0 分支当成"上游无计费信息"整条跳过。
-	if billable < 1 {
-		billable = 1
-	}
-	return billable
 }
 
 func (info *RelayInfo) GetEstimatePromptTokens() int {

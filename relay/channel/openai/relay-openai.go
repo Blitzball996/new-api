@@ -175,12 +175,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	}
 
 	if !containStreamUsage {
-		if info.IsStreamAbortedWithoutResponse() {
-			// 上游一条响应都没返回（客户端断开/超时），prompt 已被上游处理需计费，但按折扣计，
-			// 因为本地预估拿不到 cached_tokens，全额会明显高估
-			logger.LogError(c, fmt.Sprintf("stream aborted without any upstream response, billing discounted prompt tokens: %s", info.StreamStatus.Summary()))
-		}
-		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetBillableEstimatePromptTokens())
+		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
 	}
 

@@ -516,7 +516,7 @@ func OaiResponsesToChatStreamHandler(c *gin.Context, info *relaycommon.RelayInfo
 	}
 
 	if usage.TotalTokens == 0 {
-		usage = service.ResponseText2Usage(c, usageText.String(), info.UpstreamModelName, info.GetBillableEstimatePromptTokens())
+		usage = service.ResponseText2Usage(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
 
 	if !sentStart {
