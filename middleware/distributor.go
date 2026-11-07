@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -351,10 +352,11 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
-		// 读取完整请求体用于诊断
+		// 读取完整请求体写到临时文件用于诊断
 		if storage, serr := common.GetBodyStorage(c); serr == nil {
 			if bodyBytes, berr := storage.Bytes(); berr == nil {
-				logger.LogInfo(c, fmt.Sprintf("[DEBUG] path=%s ct=%s model=%s body_prefix=%.200s", c.Request.URL.Path, c.Request.Header.Get("Content-Type"), req.Model, string(bodyBytes)))
+				_ = os.WriteFile("/tmp/codex_request_debug.json", bodyBytes, 0644)
+				logger.LogInfo(c, fmt.Sprintf("[DEBUG] path=%s ct=%s model=%s body_prefix=%.300s", c.Request.URL.Path, c.Request.Header.Get("Content-Type"), req.Model, string(bodyBytes)))
 				_, _ = storage.Seek(0, io.SeekStart)
 				c.Request.Body = io.NopCloser(storage)
 			}
