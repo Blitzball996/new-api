@@ -174,7 +174,12 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			info.ChannelOtherSettings.OpenAIImageNewAPIRelay {
 			return fmt.Sprintf("%s/v1/images/generations", info.ChannelBaseUrl), nil
 		}
-		return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, info.RequestURLPath, info.ChannelType), nil
+		// 规范化无 /v1 前缀的路径（如 Codex 发出的 /responses、/models）
+		requestPath := info.RequestURLPath
+		if !strings.HasPrefix(requestPath, "/v1/") && !strings.HasPrefix(requestPath, "/v1beta/") {
+			requestPath = "/v1" + requestPath
+		}
+		return relaycommon.GetFullRequestURL(info.ChannelBaseUrl, requestPath, info.ChannelType), nil
 	}
 }
 
