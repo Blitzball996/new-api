@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
@@ -350,6 +351,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
+		logger.LogInfo(c, fmt.Sprintf("[DEBUG] path=%s content-type=%s model=%s", c.Request.URL.Path, c.Request.Header.Get("Content-Type"), req.Model))
 		modelRequest.Model = req.Model
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/realtime") {
