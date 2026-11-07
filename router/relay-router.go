@@ -66,6 +66,25 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundRouter.POST("/chat/completions", controller.Playground)
 	}
+	// Codex uses /responses and /models without /v1 prefix — mirror those routes
+	relayRootRouter := router.Group("")
+	relayRootRouter.Use(middleware.RouteTag("relay"))
+	relayRootRouter.Use(middleware.SystemPerformanceCheck())
+	relayRootRouter.Use(middleware.TokenAuth())
+	relayRootRouter.Use(middleware.ModelRequestRateLimit())
+	relayRootRouter.Use(middleware.Distribute())
+	{
+		relayRootRouter.POST("/responses", func(c *gin.Context) {
+			controller.Relay(c, types.RelayFormatOpenAIResponses)
+		})
+		relayRootRouter.GET("/responses", func(c *gin.Context) {
+			controller.Relay(c, types.RelayFormatOpenAIResponses)
+		})
+		relayRootRouter.GET("/models", func(c *gin.Context) {
+			controller.ListModels(c, constant.ChannelTypeOpenAI)
+		})
+	}
+
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())
