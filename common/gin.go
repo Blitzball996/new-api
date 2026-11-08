@@ -136,7 +136,12 @@ func UnmarshalBodyReusable(c *gin.Context, v any) error {
 	if strings.HasPrefix(contentType, "application/json") {
 		err = Unmarshal(requestBody, v)
 	} else if strings.Contains(contentType, gin.MIMEPOSTForm) {
-		err = parseFormData(requestBody, v)
+		// Try JSON first — some clients (e.g. Codex) set form Content-Type but send JSON body
+		if looksLikeJSON(requestBody) {
+			err = Unmarshal(requestBody, v)
+		} else {
+			err = parseFormData(requestBody, v)
+		}
 	} else if strings.Contains(contentType, gin.MIMEMultipartPOSTForm) {
 		err = parseMultipartFormData(c, requestBody, v)
 	} else if looksLikeJSON(requestBody) {

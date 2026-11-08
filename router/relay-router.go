@@ -80,10 +80,8 @@ func SetRelayRouter(router *gin.Engine) {
 		if strings.HasPrefix(c.Request.URL.Path, "/responses") {
 			c.Request.URL.Path = "/v1" + c.Request.URL.Path
 			c.Request.RequestURI = "/v1" + c.Request.RequestURI
-			// Ensure Content-Type is set so distributor parses body as JSON
-			if c.Request.Header.Get("Content-Type") == "" {
-				c.Request.Header.Set("Content-Type", "application/json")
-			}
+			// Responses API only accepts JSON; force Content-Type so body parsers work
+			c.Request.Header.Set("Content-Type", "application/json")
 		} else if c.Request.URL.Path == "/models" {
 			c.Request.URL.Path = "/v1/models"
 			c.Request.RequestURI = "/v1/models"
