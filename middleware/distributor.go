@@ -387,6 +387,10 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		//wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01
 		modelRequest.Model = c.Query("model")
 	}
+	// Codex sends WebSocket upgrade to /responses?model=xxx (no /v1 prefix)
+	if (strings.HasPrefix(c.Request.URL.Path, "/responses") || strings.HasPrefix(c.Request.URL.Path, "/v1/responses")) && c.Query("model") != "" {
+		modelRequest.Model = c.Query("model")
+	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/moderations") {
 		if modelRequest.Model == "" {
 			modelRequest.Model = "text-moderation-stable"
