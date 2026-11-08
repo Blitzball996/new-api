@@ -139,6 +139,9 @@ func UnmarshalBodyReusable(c *gin.Context, v any) error {
 		err = parseFormData(requestBody, v)
 	} else if strings.Contains(contentType, gin.MIMEMultipartPOSTForm) {
 		err = parseMultipartFormData(c, requestBody, v)
+	} else if looksLikeJSON(requestBody) {
+		// No recognized Content-Type but body looks like JSON (e.g. Codex CLI).
+		err = Unmarshal(requestBody, v)
 	} else {
 		// skip for now
 		// TODO: someday non json request have variant model, we will need to implementation this
@@ -302,6 +305,17 @@ func processFormMap(formMap map[string]any, v any) error {
 	}
 
 	return nil
+}
+
+// looksLikeJSON returns true if the body starts with '{' or '[' (JSON object/array).
+func looksLikeJSON(b []byte) bool {
+	for _, c := range b {
+		if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+			continue
+		}
+		return c == '{' || c == '['
+	}
+	return false
 }
 
 func parseFormData(data []byte, v any) error {
