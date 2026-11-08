@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -120,10 +121,14 @@ func GetAndValidateResponsesRequest(c *gin.Context) (*dto.OpenAIResponsesRequest
 	if err != nil {
 		return nil, err
 	}
+	// Codex WebSocket upgrade has no body; model is set in context by distributor
+	if request.Model == "" {
+		request.Model = common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+	}
 	if request.Model == "" {
 		return nil, errors.New("model is required")
 	}
-	if request.Input == nil {
+	if request.Input == nil && c.Request.Method != "GET" {
 		return nil, errors.New("input is required")
 	}
 	return request, nil
