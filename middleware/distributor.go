@@ -363,6 +363,20 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			modelRequest.Model = modelName
 		}
 		c.Set("relay_mode", relayMode)
+	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/responses") || strings.HasPrefix(c.Request.URL.Path, "/responses") {
+		// Codex and other clients may omit Content-Type. Read model from query param
+		// (WebSocket upgrade) or directly from JSON body (HTTP fallback).
+		if m := c.Query("model"); m != "" {
+			modelRequest.Model = m
+		} else if storage, serr := common.GetBodyStorage(c); serr == nil {
+			if bodyBytes, berr := storage.Bytes(); berr == nil {
+				if v := gjson.GetBytes(bodyBytes, "model"); v.Exists() && v.Type == gjson.String {
+					modelRequest.Model = v.String()
+				}
+			}
+			_, _ = storage.Seek(0, io.SeekStart)
+			c.Request.Body = io.NopCloser(storage)
+		}
 	} else if !strings.HasPrefix(c.Request.URL.Path, "/v1/audio/transcriptions") && !strings.Contains(c.Request.Header.Get("Content-Type"), "multipart/form-data") {
 		req, err := getModelFromRequest(c)
 		if err != nil {
