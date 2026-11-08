@@ -368,14 +368,24 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		// (WebSocket upgrade) or directly from JSON body (HTTP fallback).
 		if m := c.Query("model"); m != "" {
 			modelRequest.Model = m
+			logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] model from query: %s", m))
 		} else if storage, serr := common.GetBodyStorage(c); serr == nil {
 			if bodyBytes, berr := storage.Bytes(); berr == nil {
+				preview := string(bodyBytes)
+				if len(preview) > 200 {
+					preview = preview[:200]
+				}
+				logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] body(%d): %s", len(bodyBytes), preview))
 				if v := gjson.GetBytes(bodyBytes, "model"); v.Exists() && v.Type == gjson.String {
 					modelRequest.Model = v.String()
 				}
+			} else {
+				logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] body read err: %v", berr))
 			}
 			_, _ = storage.Seek(0, io.SeekStart)
 			c.Request.Body = io.NopCloser(storage)
+		} else {
+			logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] storage err: %v", serr))
 		}
 		logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESPONSES] method=%s path=%s query=%s ct=%s model=%s swp=%s",
 			c.Request.Method, c.Request.URL.Path, c.Request.URL.RawQuery,
