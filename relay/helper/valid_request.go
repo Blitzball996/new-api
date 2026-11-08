@@ -3,6 +3,7 @@ package helper
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/url"
 	"strconv"
@@ -124,6 +125,16 @@ func GetAndValidateResponsesRequest(c *gin.Context) (*dto.OpenAIResponsesRequest
 	// Codex WebSocket upgrade has no body; model is set in context by distributor
 	if request.Model == "" {
 		request.Model = common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+	}
+	// Codex HTTP fallback omits Content-Type; re-parse body directly when fields are missing
+	if (request.Model == "" || request.Input == nil) && c.Request.Method != "GET" {
+		if storage, serr := common.GetBodyStorage(c); serr == nil {
+			if bodyBytes, berr := storage.Bytes(); berr == nil && len(bodyBytes) > 0 {
+				_ = common.Unmarshal(bodyBytes, request)
+			}
+			_, _ = storage.Seek(0, io.SeekStart)
+			c.Request.Body = io.NopCloser(storage)
+		}
 	}
 	if request.Model == "" {
 		return nil, errors.New("model is required")
