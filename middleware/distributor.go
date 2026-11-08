@@ -377,6 +377,10 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			_, _ = storage.Seek(0, io.SeekStart)
 			c.Request.Body = io.NopCloser(storage)
 		}
+		logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESPONSES] method=%s path=%s query=%s ct=%s model=%s swp=%s",
+			c.Request.Method, c.Request.URL.Path, c.Request.URL.RawQuery,
+			c.Request.Header.Get("Content-Type"), modelRequest.Model,
+			c.Request.Header.Get("Sec-WebSocket-Protocol")))
 	} else if !strings.HasPrefix(c.Request.URL.Path, "/v1/audio/transcriptions") && !strings.Contains(c.Request.Header.Get("Content-Type"), "multipart/form-data") {
 		req, err := getModelFromRequest(c)
 		if err != nil {
