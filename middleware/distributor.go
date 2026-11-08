@@ -192,6 +192,23 @@ func channelSupportsRequestPath(channel *model.Channel, requestPath string) bool
 // - application/x-www-form-urlencoded
 // - multipart/form-data
 func getModelFromRequest(c *gin.Context) (*ModelRequest, error) {
+	// 先尝试 JSON 解析（Codex 等客户端可能不带 application/json Content-Type）
+	if storage, err := common.GetBodyStorage(c); err == nil {
+		if bodyBytes, err := storage.Bytes(); err == nil && gjson.ValidBytes(bodyBytes) {
+			_, _ = storage.Seek(0, io.SeekStart)
+			c.Request.Body = io.NopCloser(storage)
+			modelRequest, err := getModelFromJSONBody(c)
+			if err == nil && modelRequest.Model != "" {
+				return modelRequest, nil
+			}
+			// reset body for next attempt
+			if storage2, err := common.GetBodyStorage(c); err == nil {
+				_, _ = storage2.Seek(0, io.SeekStart)
+				c.Request.Body = io.NopCloser(storage2)
+			}
+		}
+	}
+
 	if strings.HasPrefix(c.Request.Header.Get("Content-Type"), "application/json") {
 		modelRequest, err := getModelFromJSONBody(c)
 		if err != nil {
