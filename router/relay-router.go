@@ -1,6 +1,8 @@
 package router
 
 import (
+	"strings"
+
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
@@ -66,12 +68,24 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundRouter.POST("/chat/completions", controller.Playground)
 	}
-	// Codex uses /responses and /models without /v1 prefix — mirror those routes
+	// Codex uses /responses and /models without /v1 prefix — rewrite to /v1/* so
+	// all existing routing, relay-mode detection, and distributor logic works.
 	relayRootRouter := router.Group("")
 	relayRootRouter.Use(middleware.RouteTag("relay"))
 	relayRootRouter.Use(middleware.SystemPerformanceCheck())
 	relayRootRouter.Use(middleware.TokenAuth())
 	relayRootRouter.Use(middleware.ModelRequestRateLimit())
+	relayRootRouter.Use(func(c *gin.Context) {
+		// Rewrite root /responses* and /models to their /v1/* equivalents
+		if strings.HasPrefix(c.Request.URL.Path, "/responses") {
+			c.Request.URL.Path = "/v1" + c.Request.URL.Path
+			c.Request.RequestURI = "/v1" + c.Request.RequestURI
+		} else if c.Request.URL.Path == "/models" {
+			c.Request.URL.Path = "/v1/models"
+			c.Request.RequestURI = "/v1/models"
+		}
+		c.Next()
+	})
 	relayRootRouter.Use(middleware.Distribute())
 	{
 		relayRootRouter.POST("/responses", func(c *gin.Context) {
