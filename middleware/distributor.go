@@ -366,31 +366,29 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/responses") || strings.HasPrefix(c.Request.URL.Path, "/responses") {
 		// Codex and other clients may omit Content-Type. Read model from query param
 		// (WebSocket upgrade) or directly from JSON body (HTTP fallback).
-		if m := c.Query("model"); m != "" {
-			modelRequest.Model = m
-			logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] model from query: %s", m))
-		} else if storage, serr := common.GetBodyStorage(c); serr == nil {
-			if bodyBytes, berr := storage.Bytes(); berr == nil {
-				preview := string(bodyBytes)
-				if len(preview) > 200 {
-					preview = preview[:200]
-				}
-				logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] body(%d): %s", len(bodyBytes), preview))
-				if v := gjson.GetBytes(bodyBytes, "model"); v.Exists() && v.Type == gjson.String {
-					modelRequest.Model = v.String()
-				}
+		if c.Request.Method == http.MethodGet {
+			// WebSocket upgrade: model may be in query param or absent entirely.
+			// Don't block the request here — let it reach the handler and fail
+			// naturally as a WS connection error so Codex retries with HTTP POST.
+			if m := c.Query("model"); m != "" {
+				modelRequest.Model = m
 			} else {
-				logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] body read err: %v", berr))
+				// No model in GET — skip channel selection; WS will fail downstream.
+				shouldSelectChannel = false
 			}
-			_, _ = storage.Seek(0, io.SeekStart)
-			c.Request.Body = io.NopCloser(storage)
 		} else {
-			logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESP] storage err: %v", serr))
+			if m := c.Query("model"); m != "" {
+				modelRequest.Model = m
+			} else if storage, serr := common.GetBodyStorage(c); serr == nil {
+				if bodyBytes, berr := storage.Bytes(); berr == nil {
+					if v := gjson.GetBytes(bodyBytes, "model"); v.Exists() && v.Type == gjson.String {
+						modelRequest.Model = v.String()
+					}
+				}
+				_, _ = storage.Seek(0, io.SeekStart)
+				c.Request.Body = io.NopCloser(storage)
+			}
 		}
-		logger.LogInfo(c, fmt.Sprintf("[DEBUG-RESPONSES] method=%s path=%s query=%s ct=%s model=%s swp=%s",
-			c.Request.Method, c.Request.URL.Path, c.Request.URL.RawQuery,
-			c.Request.Header.Get("Content-Type"), modelRequest.Model,
-			c.Request.Header.Get("Sec-WebSocket-Protocol")))
 	} else if !strings.HasPrefix(c.Request.URL.Path, "/v1/audio/transcriptions") && !strings.Contains(c.Request.Header.Get("Content-Type"), "multipart/form-data") {
 		req, err := getModelFromRequest(c)
 		if err != nil {
