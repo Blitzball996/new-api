@@ -87,10 +87,12 @@ jobs:
             docker compose pull new-api
             docker compose up -d new-api
             # Allow large Responses/Codex request bodies at the host reverse proxy.
-            NGINX_CONF=/www/server/nginx/conf/nginx.conf
-            if [ -f "$NGINX_CONF" ]; then
-              sed -i -E 's/^[[:space:]]*client_max_body_size[[:space:]]+[^;]+;/        client_max_body_size 512m;/' "$NGINX_CONF"
-              nginx -t
-              /etc/init.d/nginx reload
+            NGINX_BIN=/www/server/nginx/sbin/nginx
+            [ -x "$NGINX_BIN" ] || NGINX_BIN=$(command -v nginx)
+            if [ -n "$NGINX_BIN" ]; then
+              find /www/server/nginx/conf -type f \( -name '*.conf' -o -name 'nginx.conf' \) -print0 2>/dev/null |
+                xargs -0 -r sed -i -E 's/^[[:space:]]*client_max_body_size[[:space:]]+[^;]+;/        client_max_body_size 512m;/'
+              "$NGINX_BIN" -t
+              "$NGINX_BIN" -s reload
             fi
             docker image prune -f
