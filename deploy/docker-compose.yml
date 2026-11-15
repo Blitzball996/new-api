@@ -17,7 +17,7 @@ services:
       - TZ=Asia/Shanghai
       # Responses/Codex requests can contain long conversation history.
       # Keep this aligned with nginx's client_max_body_size.
-      - MAX_REQUEST_BODY_MB=${MAX_REQUEST_BODY_MB:-512}
+      - MAX_REQUEST_BODY_MB=${MAX_REQUEST_BODY_MB:-1024}
     depends_on:
       - redis
       - mysql
